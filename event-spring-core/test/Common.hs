@@ -10,20 +10,23 @@ module Common (
     module ReExport
 ) where
 
-import           Data.Aeson               (FromJSON, ToJSON, eitherDecode,
-                                           encode)
-import           Data.Functor.Identity    (Identity, runIdentity)
-import           Data.Hashable            (Hashable)
-import           Data.Typeable            (Proxy (..), Typeable, cast, typeOf,
-                                           typeRep)
+import           Control.Monad.Trans.Writer.Strict
+import           Data.Aeson                        (FromJSON, ToJSON,
+                                                    eitherDecode, encode)
+import           Data.Functor.Identity             (Identity, runIdentity)
+import           Data.Hashable                     (Hashable)
+import           Data.Monoid
+import           Data.Typeable                     (Proxy (..), Typeable, cast,
+                                                    typeOf, typeRep)
 import           EventSpring.Serialized
-import           GHC.Generics             (Generic)
+import           GHC.Generics                      (Generic)
 
-import           Test.Hspec               as ReExport
-import           Test.QuickCheck          as ReExport
+import           Test.Hspec                        as ReExport
+import           Test.QuickCheck                   as ReExport
 
-import           EventSpring.Projection   as ReExport
-import           EventSpring.TransactionT as ReExport
+import           EventSpring.Common                as ReExport
+import           EventSpring.Projection            as ReExport
+import           EventSpring.TransactionT          as ReExport
 
 newtype TestId = TestId Int deriving (Eq, Show, Arbitrary, Generic, Typeable, Hashable)
 instance ToJSON TestId
@@ -35,8 +38,15 @@ instance FromJSON TestProj
 
 instance TestId `IsProjectionIdFor` TestProj
 
-data TestEvA = TestEvA Int
-data TestEvB = TestEvB Int
+newtype TestEvA = TestEvA Int
+    deriving (Eq, Show, Arbitrary, Generic, Typeable)
+instance ToJSON TestEvA
+instance FromJSON TestEvA
+
+newtype TestEvB = TestEvB Int
+    deriving (Eq, Show, Arbitrary, Generic, Typeable)
+instance ToJSON TestEvB
+instance FromJSON TestEvB
 
 
 data TestProjector = TestProjector
@@ -57,21 +67,36 @@ instance CanHandleEvent TestProjector TestEvB where
 instance (Eq a, ToJSON a, FromJSON a, Typeable a) => Serialized a where
     serializer = Serializer encode eitherDecode
 
-testContextWithoutValues :: Applicative m => TransactionContext TestProjector () m
+testContextWithoutValues :: Monad m => TransactionContext TestProjector () (WriterT (Sum Int) m)
 testContextWithoutValues = mkTransactionContext
-    (\projId -> pure Nothing)
+    (\projId -> do
+        tell $ Sum 1
+        pure Nothing
+    )
     TestProjector
     ()
 
-testContextWithValues :: Applicative m => TransactionContext TestProjector () m
+testContextWithValues :: Monad m => TransactionContext TestProjector () (WriterT (Sum Int) m)
 testContextWithValues = mkTransactionContext
-    (\projId -> pure $ readValue $ typeOf projId)
+    (\projId -> do
+        tell $ Sum 1
+        pure $ readValue $ typeOf projId
+    )
     TestProjector
     ()
         where
             readValue ty
-                | ty == (typeRep (Proxy :: Proxy TestId)) = cast $ (versionZero, TestProj 2 2)
+                | ty == (typeRep (Proxy :: Proxy TestId)) = cast $ (mkVersion 42, TestProj 2 2)
                 | otherwise                               = Nothing
 
-runTestTransaction :: TransactionContext p md Identity -> TransactionT p md Identity a -> (a, TransactionResult)
-runTestTransaction ctx tr = runIdentity $ runTransactionT tr ctx
+runTestTransaction ::
+    TransactionContext p md (Writer (Sum Int)) ->
+    TransactionT p md (Writer (Sum Int)) a -> (a, TransactionResult)
+runTestTransaction ctx tr = fst $ runWriter $ runTransactionT tr ctx
+
+countTestTransaction ::
+    TransactionContext p md (Writer (Sum Int)) ->
+    TransactionT p md (Writer (Sum Int)) a -> (a, Int)
+countTestTransaction ctx tr = repack $ runWriter $ runTransactionT tr ctx
+    where
+        repack ((result, _), Sum rs) = (result, rs)

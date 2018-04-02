@@ -4,8 +4,9 @@
 {-# LANGUAGE TypeOperators             #-}
 module EventSpring.Internal.Projection where
 
-import           Data.ByteString                 (ByteString)
-import           Data.Typeable                   (TypeRep, Typeable)
+import           Data.ByteString             (ByteString)
+import           Data.Hashable               (Hashable)
+import           Data.Typeable               (TypeRep, Typeable)
 
 import           EventSpring.Internal.Common
 import           EventSpring.Serialized
@@ -31,10 +32,14 @@ data Change projId projValue = Delta projId (projValue -> projValue)
 
 
 
-data Update = forall projId proj. (projId `IsProjectionIdFor` proj) => Update projId (proj -> proj)
+data Update projector = forall projId proj. (
+    projId `IsProjectionIdFor` proj, projector `CanHandleProjection` proj,
+    Serialized projId, Hashable projId, Serialized proj
+    ) =>
+    Update projId (proj -> proj)
 
 class CanHandleProjection projector projection where
     initialProjection :: projector -> projection
 
 class CanHandleEvent projector event where
-    changesForEvent :: projector -> event -> [Update]
+    changesForEvent :: projector -> event -> [Update projector]

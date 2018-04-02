@@ -3,6 +3,7 @@
 module EventSpring.Projection (
     ProjectionVersion,
     versionZero,
+    mkVersion,
 
     IsProjectionIdFor,
 

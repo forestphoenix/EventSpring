@@ -5,8 +5,12 @@ module EventSpring.TransactionT (
     TransactionT,
     runTransactionT,
     readProjection,
+    recordSingle,
+    record,
 
-    TransactionResult(..)
+    TransactionResult(..),
+    NewProjection(..),
+    ReadProjection(..)
 ) where
 
 import EventSpring.Internal.TransactionT
