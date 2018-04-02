@@ -1,6 +1,9 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
 module EventSpring.Projection (
+    ProjectionVersion,
+    versionZero,
+
     IsProjectionIdFor,
 
     CanHandleProjection,
@@ -13,3 +16,4 @@ module EventSpring.Projection (
 ) where
 
 import EventSpring.Internal.Projection
+import EventSpring.Internal.Common

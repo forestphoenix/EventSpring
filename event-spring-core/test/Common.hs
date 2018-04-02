@@ -13,7 +13,9 @@ module Common (
 import           Data.Aeson               (FromJSON, ToJSON, eitherDecode,
                                            encode)
 import           Data.Functor.Identity    (Identity, runIdentity)
-import           Data.Typeable            (Proxy(..), Typeable, typeOf, typeRep, cast)
+import           Data.Hashable            (Hashable)
+import           Data.Typeable            (Proxy (..), Typeable, cast, typeOf,
+                                           typeRep)
 import           EventSpring.Serialized
 import           GHC.Generics             (Generic)
 
@@ -23,7 +25,7 @@ import           Test.QuickCheck          as ReExport
 import           EventSpring.Projection   as ReExport
 import           EventSpring.TransactionT as ReExport
 
-newtype TestId = TestId Int deriving (Eq, Show, Arbitrary, Generic, Typeable)
+newtype TestId = TestId Int deriving (Eq, Show, Arbitrary, Generic, Typeable, Hashable)
 instance ToJSON TestId
 instance FromJSON TestId
 
@@ -52,7 +54,7 @@ instance CanHandleEvent TestProjector TestEvB where
         where
             update (TestProj a b) = TestProj a (b + 1)
 
-instance (ToJSON a, FromJSON a, Typeable a) => Serialized a where
+instance (Eq a, ToJSON a, FromJSON a, Typeable a) => Serialized a where
     serializer = Serializer encode eitherDecode
 
 testContextWithoutValues :: Applicative m => TransactionContext TestProjector () m
@@ -68,7 +70,7 @@ testContextWithValues = mkTransactionContext
     ()
         where
             readValue ty
-                | ty == (typeRep (Proxy :: Proxy TestId)) = cast $ TestProj 2 2
+                | ty == (typeRep (Proxy :: Proxy TestId)) = cast $ (versionZero, TestProj 2 2)
                 | otherwise                               = Nothing
 
 runTestTransaction :: TransactionContext p md Identity -> TransactionT p md Identity a -> (a, TransactionResult)

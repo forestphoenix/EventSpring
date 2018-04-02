@@ -24,5 +24,8 @@ instance Hashable AnyProjectionId where
 
 newtype ProjectionVersion = ProjectionVersion Int
 
+versionZero :: ProjectionVersion
+versionZero = ProjectionVersion 0
+
 
 data AnyEvent = forall event. Serialized event => AnyEvent event
