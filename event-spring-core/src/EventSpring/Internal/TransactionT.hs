@@ -24,8 +24,22 @@ type ProjReader m = forall projId proj.
     (projId `IsProjectionIdFor` proj, Serialized projId, Serialized proj) =>
     projId -> m (Maybe (ProjectionVersion, proj))
 
-data NewProjection = forall projId proj. (projId `IsProjectionIdFor` proj) =>
+data NewProjection = forall projId proj.
+    (projId `IsProjectionIdFor` proj, Serialized projId, Serialized proj) =>
     NewProjection projId proj
+
+instance Eq NewProjection where
+    (NewProjection p1 v1) == (NewProjection p2 v2) = fromMaybe False $
+        (&&) <$> samePs <*> sameVs
+        where
+            samePs = (p1 ==) <$> cast p2
+            sameVs = (v1 ==) <$> cast v2
+
+instance Show NewProjection where
+    show (NewProjection p v) =
+        "NewProjection " ++
+        "{-" ++ show (typeOf p) ++ "-} " ++ show (serialize serializer p) ++
+        "{-" ++ show (typeOf v) ++ "-} " ++ show (serialize serializer v)
 
 data ReadProjection = forall projId proj. (
     Eq projId, Serialized projId
@@ -52,7 +66,7 @@ data TransactionContext projector md m = TransactionContext {
 data TransactionState = TransactionState {
     tsNewEvents       :: S.Seq AnyEvent,
     tsReadProjections :: M.HashMap AnyProjectionId (ProjectionVersion, AnyProjection),
-    tsNewProjections  :: M.HashMap AnyProjectionId AnyProjection
+    tsNewProjections  :: M.HashMap AnyProjectionId NewProjection
 }
 
 data TransactionResult = TransactionResult {
@@ -71,10 +85,11 @@ instance MonadTrans (TransactionT p md) where
 readCachedProjection :: forall proj projId. Serialized proj =>
     TransactionState -> AnyProjectionId -> Maybe proj
 readCachedProjection TransactionState{..} projId =
-    (castToProj =<< M.lookup projId tsNewProjections) <|>
+    (castNewProj =<< M.lookup projId tsNewProjections) <|>
     ((castToProj . snd) =<< M.lookup projId tsReadProjections)
     where
         castToProj (AnyProjection proj) = (cast proj) :: Maybe proj
+        castNewProj (NewProjection _ proj) = cast proj
 
 loadProjection :: (
     projId `IsProjectionIdFor` proj,
@@ -125,8 +140,8 @@ recordSingle event = TransactionT $ do
     let updates = changesForEvent projector event
     newProjs <- forM updates $ \(Update projId f) -> do
         proj <- unTransactionT $ readProjection projId
-        pure $ (AnyProjectionId projId, AnyProjection $ f proj)
-    let insertNewProj (pId, proj) = M.insert pId proj
+        pure $ (AnyProjectionId projId, NewProjection projId $ f proj)
+    let insertNewProj (pId, newProj) = M.insert pId newProj
         insertAllProjs m = foldr insertNewProj m newProjs
     modify $ \ts@TransactionState{..} -> ts {
         tsNewEvents = tsNewEvents S.>< S.singleton (AnyEvent event),
@@ -158,9 +173,8 @@ runTransactionT (TransactionT tr) ctx = toResult <$> runTr
 stateToResult :: TransactionState -> TransactionResult
 stateToResult TransactionState{..} = TransactionResult {
         trNewEvents = tsNewEvents,
-        trNewProjs  = M.foldrWithKey (\k v l -> (mkNewProj k v) : l ) [] tsNewProjections,
+        trNewProjs  = M.foldrWithKey (\k v l -> v : l ) [] tsNewProjections,
         trReadProjs = M.foldrWithKey (\k v l -> (mkReadProj k v) : l ) [] tsReadProjections
     }
     where
-        mkNewProj = undefined
         mkReadProj (AnyProjectionId projId) (ver, _) = ReadProjection projId ver

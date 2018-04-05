@@ -100,3 +100,8 @@ countTestTransaction ::
 countTestTransaction ctx tr = repack $ runWriter $ runTransactionT tr ctx
     where
         repack ((result, _), Sum rs) = (result, rs)
+
+unorderedEquals :: (Show a, Eq a) => [a] -> [a] -> Property
+unorderedEquals l1 l2 = property $
+    length l1 == length l2 .&&.
+    (conjoin $ (\i -> disjoin $ (=== i) <$> l1) <$> l2)

@@ -27,12 +27,18 @@ spec = do
                 forM_ projIds readProjection
         it "Should record the read" $ property $
             \(projIds :: [TestId]) ->
-                let expectedNewProjs = (\p -> ReadProjection p $ mkVersion 42) <$> (nub $ projIds)
-                    checkExpected actual = (length actual === length expectedNewProjs) .&&.
-                        (conjoin $ fmap (\expect -> disjoin $ (=== expect) <$> actual) expectedNewProjs)
+                let expectedWithVals = (\p -> ReadProjection p $ mkVersion 42) <$> (nub $ projIds)
+                    expectedWithoutVals = (\p -> ReadProjection p versionZero) <$> (nub $ projIds)
                 in
-                checkExpected $ trReadProjs $ snd $ runTestTransaction testContextWithValues $ do
-                    forM_ projIds readProjection
+                conjoin [
+                    unorderedEquals expectedWithVals $
+                        trReadProjs $ snd $ runTestTransaction testContextWithValues $
+                            forM_ projIds readProjection,
+                    unorderedEquals expectedWithoutVals $
+                        trReadProjs $ snd $ runTestTransaction testContextWithoutValues $
+                            forM_ projIds readProjection
+                    ]
+
     describe "writing events & reading them" $ do
         it "written events become part of the result" $ property $
             \(events :: [TestEvA]) -> (AnyEvent <$> events ===) $
@@ -46,4 +52,16 @@ spec = do
                     (TestProj cnt _) <- readProjection $ TestId i
                     pure $ cnt === (length $ filter (== (TestEvA i)) events)
                 pure $ conjoin projProps
-        xit "new projections should be recorded" False
+        it "new projections should be recorded" $ property $
+            \(events :: [TestEvA]) ->
+                let expectedNewProjs = expectedProj <$> nub events
+                    expectedProj (TestEvA e) = NewProjection
+                        (TestId e)
+                        (TestProj (2 + length (filter (== TestEvA e) events)) 2)
+                    actualNewProjs = trNewProjs $ snd $ runTestTransaction testContextWithValues $
+                        record events
+                in
+                counterexample (
+                    "expected: " ++ show expectedNewProjs ++
+                    "\nactual:   " ++ show actualNewProjs
+                ) $ unorderedEquals expectedNewProjs actualNewProjs
