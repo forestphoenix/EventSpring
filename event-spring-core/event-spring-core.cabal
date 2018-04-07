@@ -37,7 +37,7 @@ library
     hs-source-dirs:      src
     default-language:    Haskell2010
 
-test-suite event-spring-memory-test
+test-suite event-spring-core-test
       type:                exitcode-stdio-1.0
       hs-source-dirs:      test
       main-is:             Spec.hs
