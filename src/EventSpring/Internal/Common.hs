@@ -42,4 +42,4 @@ instance Eq AnyEvent where
             sameValues = (id1 ==) <$> cast id2
 
 instance Show AnyEvent where
-    show (AnyEvent c) = "AnyEvent {-" ++ show (typeOf c) ++ "-} " ++ show (serialize serializer $ c)
+    show (AnyEvent c) = "AnyEvent {-" ++ show (typeOf c) ++ "-} " ++ show (serialize serializer c)
