@@ -21,10 +21,9 @@ library
         EventSpring.Projection
         EventSpring.TransactionT
         EventSpring.Common
-    other-modules:
-        EventSpring.Internal.Common
-        EventSpring.Internal.Projection
-        EventSpring.Internal.TransactionT
+        EventSpring.Memory
+
+    -- other-modules:
     -- other-extensions:
     build-depends:
         base,
