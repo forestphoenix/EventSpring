@@ -31,6 +31,12 @@ import           EventSpring.Serialized
 
 type family ProjectionFor projId
 
+data OnEvent onEvent = forall event. Serialized event =>
+    OnEvent (event -> onEvent)
+
+instance Functor OnEvent where
+    fmap f (OnEvent g) = OnEvent $ f . g
+
 -- Single-Projection projectors
 
 data Delta projId =
@@ -42,10 +48,7 @@ data Delta projId =
     -- | Creates the prjection with id 'projId' or updates it if it already exists.
     CreateOrUpdate projId (ProjectionFor projId) (ProjectionFor projId -> ProjectionFor projId)
 
-data OnEvent projId = forall event. Serialized event =>
-    OnEvent (event -> Delta projId)
-
-newtype Projector projId = Projector [OnEvent projId]
+newtype Projector projId = Projector [OnEvent (Delta projId)]
     deriving (Semigroup, Monoid)
 
 -- Any-Projection Projectors
@@ -58,15 +61,10 @@ toAnyDelta :: (proj ~ ProjectionFor projId, Serialized projId, Serialized proj) 
     Delta projId -> AnyDelta
 toAnyDelta = AnyDelta
 
-data AnyOnEvent = forall event. Serialized event =>
-    AnyOnEvent (event -> AnyDelta)
-
-toAnyOnEvent (OnEvent f) = AnyOnEvent $ AnyDelta . f
-
-newtype AnyProjector = AnyProjector [AnyOnEvent]
+newtype AnyProjector = AnyProjector [OnEvent AnyDelta]
     deriving (Semigroup, Monoid)
 
-toAnyProjector (Projector oes) = AnyProjector $ toAnyOnEvent <$> oes
+toAnyProjector (Projector oes) = AnyProjector $ fmap toAnyDelta <$> oes
 
 -- Projecting
 
