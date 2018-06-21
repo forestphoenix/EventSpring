@@ -1,59 +1,91 @@
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE FunctionalDependencies    #-}
-{-# LANGUAGE MultiParamTypeClasses     #-}
-{-# LANGUAGE TypeOperators             #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleContexts #-}
 module EventSpring.Projection (
-    ProjectionVersion,
-    versionZero,
-    mkVersion,
+    ProjectionFor,
 
-    IsProjectionIdFor,
+    OnEvent(..),
+    Delta(..),
+    Projector(..),
 
-    CanHandleProjection,
-    initialProjection,
+    AnyDelta(..),
+    AnyProjector(),
+    toAnyProjector,
 
-    CanHandleEvent,
-    changesForEvent,
+    -- Projecting
+    deltasForEvent,
+    anyDeltasForEvent,
 
-    Update(..)
+    -- Projecting for Unit-tests
+    projectOntoAL,
+    AnyProjected(..),
+    projectOntoAnyAL,
 ) where
 
 import           Data.ByteString             (ByteString)
 import           Data.Hashable               (Hashable)
 import           Data.Typeable               (TypeRep, Typeable)
 
-import EventSpring.Common
 import           EventSpring.Serialized
 
-class IsProjectionIdFor projId projValue | projId -> projValue
+type family ProjectionFor projId
 
-newtype Projections = Projections [Projection]
+-- Single-Projection projectors
 
-data Projection = forall projId projValue. (
-    Serialized projId,
-    Serialized projValue,
-    projId `IsProjectionIdFor` projValue
-    ) => Projection {
-    initialValue    :: projValue,
-    transformations :: [OnEvent projId projValue]
-}
+data Delta projId =
+    -- | Update the projection with id 'projId'. This does nothing if the projection does not exist
+    Update projId (ProjectionFor projId -> ProjectionFor projId) |
+    -- | Create the prjection with id 'projId'.
+    --   If the projection already exists, this behaves like 'Update projId id'
+    Create projId (ProjectionFor projId) |
+    -- | Creates the prjection with id 'projId' or updates it if it already exists.
+    CreateOrUpdate projId (ProjectionFor projId) (ProjectionFor projId -> ProjectionFor projId)
 
-data OnEvent projId projValue =
-    forall event. Serialized event =>
-        Transformation (event -> Change projId projValue)
+data OnEvent projId = forall event. Serialized event =>
+    OnEvent (event -> Delta projId)
 
-data Change projId projValue = Delta projId (projValue -> projValue)
+newtype Projector projId = Projector [OnEvent projId]
+    deriving (Semigroup, Monoid)
 
+-- Any-Projection Projectors
 
+data AnyDelta = forall projId proj.
+    (Serialized projId, Serialized (ProjectionFor projId)) =>
+    AnyDelta (Delta projId)
 
-data Update projector = forall projId proj. (
-    projId `IsProjectionIdFor` proj, projector `CanHandleProjection` proj,
-    Serialized projId, Hashable projId, Serialized proj
-    ) =>
-    Update projId (proj -> proj)
+toAnyDelta :: (proj ~ ProjectionFor projId, Serialized projId, Serialized proj) =>
+    Delta projId -> AnyDelta
+toAnyDelta = AnyDelta
 
-class CanHandleProjection projector projection where
-    initialProjection :: projector -> projection
+data AnyOnEvent = forall event. Serialized event =>
+    AnyOnEvent (event -> AnyDelta)
 
-class CanHandleEvent projector event where
-    changesForEvent :: projector -> event -> [Update projector]
+toAnyOnEvent (OnEvent f) = AnyOnEvent $ AnyDelta . f
+
+newtype AnyProjector = AnyProjector [AnyOnEvent]
+    deriving (Semigroup, Monoid)
+
+toAnyProjector (Projector oes) = AnyProjector $ toAnyOnEvent <$> oes
+
+-- Projecting
+
+deltasForEvent :: Serialized event => Projector projId -> event -> [Delta projId]
+deltasForEvent = undefined
+
+anyDeltasForEvent :: Serialized event => AnyProjector -> event -> [AnyDelta]
+anyDeltasForEvent = undefined
+
+-- Projecting for Unit Tests
+
+projectOntoAL :: (Serialized event) =>
+    Projector projId -> event -> [(projId, ProjectionFor projId)] -> [(projId, ProjectionFor projId)]
+projectOntoAL = undefined
+
+data AnyProjected = forall projId proj.
+    (proj ~ ProjectionFor projId, Serialized projId, Serialized proj) =>
+    AnyProjected projId proj
+-- TODO: Eq, Show
+
+projectOntoAnyAL :: Serialized event => AnyProjector -> event -> [AnyProjected] -> [AnyProjected]
+projectOntoAnyAL = undefined

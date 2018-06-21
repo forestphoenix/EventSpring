@@ -28,7 +28,7 @@ instance Eq AnyProjectionId where
             sameValues = (id1 ==) <$> cast id2
 
 instance Show AnyProjectionId where
-    show (AnyProjectionId c) = "AnyProjectionId {-" ++ show (typeOf c) ++ "-} " ++ show (serialize serializer $ c)
+    show (AnyProjectionId c) = "AnyProjectionId {-" ++ show (typeOf c) ++ "-} " ++ show (serialize c)
 
 instance Hashable AnyProjectionId where
     hashWithSalt salt (AnyProjectionId pId) = hashWithSalt salt pId
@@ -50,4 +50,4 @@ instance Eq AnyEvent where
             sameValues = (id1 ==) <$> cast id2
 
 instance Show AnyEvent where
-    show (AnyEvent c) = "AnyEvent {-" ++ show (typeOf c) ++ "-} " ++ show (serialize serializer c)
+    show (AnyEvent c) = "AnyEvent {-" ++ show (typeOf c) ++ "-} " ++ show (serialize c)

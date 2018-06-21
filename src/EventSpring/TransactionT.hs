@@ -3,7 +3,7 @@
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE TypeOperators              #-}
+{-# LANGUAGE FlexibleContexts #-}
 module EventSpring.TransactionT (
     TransactionContext,
     mkTransactionContext,
@@ -33,13 +33,13 @@ import           EventSpring.Common
 import           EventSpring.Projection
 import           EventSpring.Serialized
 
-type ProjReader m = forall projId proj.
-    (projId `IsProjectionIdFor` proj, Serialized projId, Serialized proj) =>
-    projId -> m (Maybe (ProjectionVersion, proj))
+type ProjReader m = forall projId.
+    (Serialized projId, Serialized (ProjectionFor projId)) =>
+    projId -> m (Maybe (ProjectionVersion, ProjectionFor projId))
 
-data NewProjection = forall projId proj.
-    (projId `IsProjectionIdFor` proj, Serialized projId, Serialized proj) =>
-    NewProjection projId proj
+data NewProjection = forall projId.
+    (Serialized projId, Serialized (ProjectionFor projId)) =>
+    NewProjection projId (ProjectionFor projId)
 
 instance Eq NewProjection where
     (NewProjection p1 v1) == (NewProjection p2 v2) = fromMaybe False $
@@ -51,8 +51,8 @@ instance Eq NewProjection where
 instance Show NewProjection where
     show (NewProjection p v) =
         "NewProjection " ++
-        "{-" ++ show (typeOf p) ++ "-} " ++ show (serialize serializer p) ++
-        "{-" ++ show (typeOf v) ++ "-} " ++ show (serialize serializer v)
+        "{-" ++ show (typeOf p) ++ "-} " ++ show (serialize p) ++
+        "{-" ++ show (typeOf v) ++ "-} " ++ show (serialize v)
 
 data ReadProjection = forall projId proj. (
     Eq projId, Serialized projId
@@ -66,12 +66,12 @@ instance Eq ReadProjection where
 instance Show ReadProjection where
     show (ReadProjection p v) =
         "ReadProjection " ++ show v ++
-        " {-" ++ show (typeOf p) ++ "-} " ++ show (serialize serializer $ p)
+        " {-" ++ show (typeOf p) ++ "-} " ++ show (serialize p)
 
-data TransactionContext projector md m = TransactionContext {
+data TransactionContext md m = TransactionContext {
     tcReadProjection :: ProjReader m,
 
-    tcProjector      :: projector,
+    tcProjector      :: AnyProjector,
 
     tcMetadata       :: md
 }
@@ -88,11 +88,11 @@ data TransactionResult = TransactionResult {
     trReadProjs :: [ReadProjection]
 }
 
-newtype TransactionT p md m a = TransactionT
-    { unTransactionT :: (RWST (TransactionContext p md m) () TransactionState m a) }
+newtype TransactionT md m a = TransactionT
+    { unTransactionT :: (RWST (TransactionContext md m) () TransactionState m a) }
     deriving (Functor, Applicative, Monad)
 
-instance MonadTrans (TransactionT p md) where
+instance MonadTrans (TransactionT md) where
     lift m = TransactionT $ lift m
 
 readCachedProjection :: forall proj projId. Serialized proj =>
@@ -105,50 +105,47 @@ readCachedProjection TransactionState{..} projId =
         castNewProj (NewProjection _ proj) = cast proj
 
 loadProjection :: (
-    projId `IsProjectionIdFor` proj,
-    Serialized projId, Serialized proj,
+    Serialized projId, Serialized (ProjectionFor projId),
     Monad m) =>
-    projId -> TransactionT p md m (Maybe (ProjectionVersion, proj))
+    projId -> TransactionT md m (Maybe (ProjectionVersion, ProjectionFor projId))
 loadProjection projId = TransactionT $ do
     reader <- tcReadProjection <$> ask
     loaded <- lift $ reader projId
     pure $ loaded
 
 cacheProjection :: (
-    projId `IsProjectionIdFor` proj,
-    Serialized projId, Hashable projId, Serialized proj,
+    Serialized projId, Hashable projId, Serialized (ProjectionFor projId),
     Monad m) =>
-    projId -> ProjectionVersion -> proj -> TransactionT p md m ()
+    projId -> ProjectionVersion -> (ProjectionFor projId) -> TransactionT md m ()
 cacheProjection projId ver val = TransactionT $
     modify $ \state@TransactionState{..} -> state {
         tsReadProjections = M.insert (AnyProjectionId projId) (ver, AnyProjection val) tsReadProjections
     }
 
 readProjection :: (
-    p `CanHandleProjection` proj,
-    projId `IsProjectionIdFor` proj,
-    Serialized projId, Hashable projId, Serialized proj,
+    Serialized projId, Hashable projId, Serialized (ProjectionFor projId),
     Monad m) =>
-    projId -> TransactionT p md m proj
+    projId -> TransactionT md m (Maybe (ProjectionFor projId))
 readProjection projId = TransactionT $ do
     trState <- get
     projector <- tcProjector <$> ask
     let cached = readCachedProjection trState $ AnyProjectionId projId
     case cached of
-        Just p  -> pure p
+        Just p  -> pure $ Just p
         Nothing -> do
              loaded <- unTransactionT $ loadProjection projId
-             let (readVer, readProj) = fromMaybe (versionZero, initialProjection projector) loaded
-             unTransactionT $ cacheProjection projId readVer readProj
-             return readProj
+             case loaded of
+                 Nothing -> pure Nothing
+                 Just (readVer, readProj) -> do
+                     unTransactionT $ cacheProjection projId readVer readProj
+                     return $ Just readProj
 
 recordSingle :: (
-    p `CanHandleEvent` e,
     Serialized e,
     Monad m
     ) =>
-    e -> TransactionT p md m ()
-recordSingle event = TransactionT $ do
+    e -> TransactionT md m ()
+recordSingle event = undefined {- TransactionT $ do
     projector <- tcProjector <$> ask
     let updates = changesForEvent projector event
     newProjs <- forM updates $ \(Update projId f) -> do
@@ -159,21 +156,20 @@ recordSingle event = TransactionT $ do
     modify $ \ts@TransactionState{..} -> ts {
         tsNewEvents = tsNewEvents S.>< S.singleton (AnyEvent event),
         tsNewProjections = insertAllProjs tsNewProjections
-    }
+    }-}
 
 record :: (
-    p `CanHandleEvent` e,
     Serialized e,
     Monad m
     ) =>
-    [e] -> TransactionT p md m ()
+    [e] -> TransactionT md m ()
 record events = forM_ events recordSingle
 
-mkTransactionContext :: ProjReader m -> projector -> metadata -> TransactionContext projector metadata m
+mkTransactionContext :: ProjReader m -> AnyProjector -> metadata -> TransactionContext metadata m
 mkTransactionContext = TransactionContext
 
 
-runTransactionT :: Monad m => TransactionT p md m a -> TransactionContext p md m -> m (a, TransactionResult)
+runTransactionT :: Monad m => TransactionT md m a -> TransactionContext md m -> m (a, TransactionResult)
 runTransactionT (TransactionT tr) ctx = toResult <$> runTr
     where
         toResult (a, st, _) = (a, stateToResult st)

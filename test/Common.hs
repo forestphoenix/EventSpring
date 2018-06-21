@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE UndecidableInstances       #-}
 module Common (
@@ -20,13 +20,24 @@ import           Data.Typeable                     (Proxy (..), Typeable, cast,
                                                     typeOf, typeRep)
 import           EventSpring.Serialized
 import           GHC.Generics                      (Generic)
+import Debug.Trace (trace)
 
 import           Test.Hspec                        as ReExport
 import           Test.QuickCheck                   as ReExport
+import           Control.Category                  as ReExport hiding ((.), id)
 
 import           EventSpring.Common                as ReExport
 import           EventSpring.Projection            as ReExport
 import           EventSpring.TransactionT          as ReExport
+
+isIdentity :: (Eq a, Show a, Arbitrary a) => (a -> a) -> Property
+isIdentity f = property $ \a -> f a === a
+
+isConst :: (Eq b, Show b, Show a, Arbitrary a) => b -> (a -> b) -> Property
+isConst b f = property $ \a -> f a === b
+
+traceId :: Show a => a -> a
+traceId a = trace (show a) a
 
 newtype TestId = TestId Int deriving (Eq, Show, Arbitrary, Generic, Typeable, Hashable)
 instance ToJSON TestId
@@ -36,7 +47,7 @@ data TestProj = TestProj Int Int deriving (Eq, Show, Generic, Typeable)
 instance ToJSON TestProj
 instance FromJSON TestProj
 
-instance TestId `IsProjectionIdFor` TestProj
+type instance ProjectionFor TestId = TestProj
 
 newtype TestEvA = TestEvA Int
     deriving (Eq, Show, Arbitrary, Generic, Typeable)
@@ -48,41 +59,31 @@ newtype TestEvB = TestEvB Int
 instance ToJSON TestEvB
 instance FromJSON TestEvB
 
-
-data TestProjector = TestProjector
-
-instance CanHandleProjection TestProjector TestProj where
-    initialProjection _ = TestProj 0 0
-
-instance CanHandleEvent TestProjector TestEvA where
-    changesForEvent _ (TestEvA e) = [Update (TestId e) update]
-        where
-            update (TestProj a b) = TestProj (a + 1) b
-
-instance CanHandleEvent TestProjector TestEvB where
-    changesForEvent _ (TestEvB e) = [Update (TestId e) update]
-        where
-            update (TestProj a b) = TestProj a (b + 1)
-
 instance (Eq a, ToJSON a, FromJSON a, Typeable a) => Serialized a where
-    serializer = Serializer encode eitherDecode
+    serialize = encode
+    deserialize = eitherDecode
 
-testContextWithoutValues :: Monad m => TransactionContext TestProjector () (WriterT (Sum Int) m)
+testProjector :: AnyProjector
+testProjector = toAnyProjector $ Projector [
+    OnEvent (\(TestEvA i) -> Create (TestId i) (TestProj 10 1))
+    ]
+
+testContextWithoutValues :: Monad m => TransactionContext () (WriterT (Sum Int) m)
 testContextWithoutValues = mkTransactionContext
     (\projId -> do
         tell $ Sum 1
         pure Nothing
     )
-    TestProjector
+    testProjector
     ()
 
-testContextWithValues :: Monad m => TransactionContext TestProjector () (WriterT (Sum Int) m)
+testContextWithValues :: Monad m => TransactionContext () (WriterT (Sum Int) m)
 testContextWithValues = mkTransactionContext
     (\projId -> do
         tell $ Sum 1
         pure $ readValue $ typeOf projId
     )
-    TestProjector
+    testProjector
     ()
         where
             readValue ty
@@ -90,13 +91,13 @@ testContextWithValues = mkTransactionContext
                 | otherwise                               = Nothing
 
 runTestTransaction ::
-    TransactionContext p md (Writer (Sum Int)) ->
-    TransactionT p md (Writer (Sum Int)) a -> (a, TransactionResult)
+    TransactionContext md (Writer (Sum Int)) ->
+    TransactionT md (Writer (Sum Int)) a -> (a, TransactionResult)
 runTestTransaction ctx tr = fst $ runWriter $ runTransactionT tr ctx
 
 countTestTransaction ::
-    TransactionContext p md (Writer (Sum Int)) ->
-    TransactionT p md (Writer (Sum Int)) a -> (a, Int)
+    TransactionContext md (Writer (Sum Int)) ->
+    TransactionT md (Writer (Sum Int)) a -> (a, Int)
 countTestTransaction ctx tr = repack $ runWriter $ runTransactionT tr ctx
     where
         repack ((result, _), Sum rs) = (result, rs)

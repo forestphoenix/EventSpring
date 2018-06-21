@@ -12,10 +12,10 @@ spec :: Spec
 spec = do
     describe "reading without writes" $ do
         it "A new projection has its initial Value" $ property $
-            \(projId :: TestId) -> (TestProj 0 0 ===) $ fst $ runTestTransaction testContextWithoutValues $ do
+            \(projId :: TestId) -> (Just (TestProj 0 0) ===) $ fst $ runTestTransaction testContextWithoutValues $ do
                 readProjection projId
         it "A present projection has the stored value" $ property $
-            \(projId :: TestId) -> (TestProj 2 2 ===) $ fst $ runTestTransaction testContextWithValues $ do
+            \(projId :: TestId) -> (Just (TestProj 2 2) ===) $ fst $ runTestTransaction testContextWithValues $ do
                 readProjection projId
         it "Should read a stored projection only once, if a value is stored" $ property $
             \(projIds :: [TestId]) -> (length (nub projIds) ===) $ snd $
@@ -49,7 +49,7 @@ spec = do
                 forM_ events $ recordSingle
                 let distinctEvents = nub events
                 projProps <- forM distinctEvents $ \(TestEvA i) -> do
-                    (TestProj cnt _) <- readProjection $ TestId i
+                    (Just (TestProj cnt _)) <- readProjection $ TestId i
                     pure $ cnt === (length $ filter (== (TestEvA i)) events)
                 pure $ conjoin projProps
         it "new projections should be recorded" $ property $

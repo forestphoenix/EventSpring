@@ -24,10 +24,13 @@ library
         EventSpring.Memory
 
     -- other-modules:
-    -- other-extensions:
+    other-extensions:
+        ExistentialQuantification,
+        TypeFamilies
     build-depends:
         base,
         bytestring,
+        utf8-string,
         containers,
         hashable,
         text,
