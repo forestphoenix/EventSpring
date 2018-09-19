@@ -34,8 +34,6 @@ import           EventSpring.Common
 import           EventSpring.Projection
 import           EventSpring.Serialized
 
-import Debug.Trace
-
 type ProjReader m = forall projId.
     (Serialized projId, Serialized (ProjectionFor projId)) =>
     projId -> m (Maybe (ProjectionVersion, ProjectionFor projId))
@@ -91,10 +89,14 @@ readCachedProjection :: forall proj projId. Serialized proj =>
     TransactionState -> AnyProjId -> Maybe (Maybe proj)
 readCachedProjection TransactionState{..} projId = 
     fmap Just (castNewProj =<< M.lookup projId tsNewProjections) <|>
-    (traceShowId . (fmap castToProj . snd) . traceShowId =<< M.lookup (traceShowId projId) tsReadProjections)
+    (collapseLookupAndCast . (fmap castToProj . snd) =<< M.lookup projId tsReadProjections)
         where
             castToProj (AnyProjection proj) = (castAny proj) :: Maybe proj
             castNewProj (NewProjection _ proj) = Typeable.cast proj
+
+            collapseLookupAndCast (Just Nothing) = Nothing
+            collapseLookupAndCast Nothing        = Just Nothing
+            collapseLookupAndCast (Just a)       = Just a
 
 loadProjection :: (
     Serialized projId, Serialized (ProjectionFor projId),
@@ -111,7 +113,7 @@ cacheProjection :: (
     projId -> ProjectionVersion -> Maybe (ProjectionFor projId) -> TransactionT md m ()
 cacheProjection projId ver val = TransactionT $
     modify $ \state@TransactionState{..} -> state {
-        tsReadProjections = traceShowId $ M.insert (mkAnyProjId projId) (ver, mkAnyProjection <$> val) tsReadProjections
+        tsReadProjections = M.insert (mkAnyProjId projId) (ver, mkAnyProjection <$> val) tsReadProjections
     }
 
 readProjection :: (

@@ -7,7 +7,6 @@ import           Data.List     (sort, nub, filter)
 import           Data.Typeable (cast)
 
 import           Common
-import Debug.Trace
 
 spec :: Spec
 spec = do
@@ -25,7 +24,7 @@ spec = do
         it "Should read a stored projection only once, without a stored value" $ property $
             \(projIds :: [A]) -> (length (nub projIds) ===) $ snd $
               countTestTransaction testContextWithoutValues $ do
-                trace "start" $ forM_ projIds readProjection
+                forM_ projIds readProjection
         it "Should record the read" $ property $
             \(projIds :: [A]) ->
                 let expectedWithVals = (\p -> ReadProjection (AnyHashable p) $ mkVersion 42) <$> (nub $ projIds)
