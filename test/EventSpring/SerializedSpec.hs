@@ -7,6 +7,10 @@ import EventSpring.Serialized
 
 import           Common
 
+fromExtractResult (ExtractOk a) = a
+fromExtractResult (ExtractError err) = error err
+fromExtractResult (ExtractTypeMismatch mismatch) = error $ show mismatch
+
 spec :: Spec
 spec = do
     it "serializing and deserializing is the identity" $ isIdentity $
@@ -14,13 +18,15 @@ spec = do
         serializeAny >>>
         deserializeAny >>>
         extractPartial >>>
-        either (\msg -> error $ "deserialising should be successful, was " ++ msg) id >>>
+        fromExtractResult >>>
         id @TestEvA
 
     it "serializing and deserializing to a different type fails" $
-      isConst (Left "Error in extractPartial: type mismatch (expected TestEvB, got TestEvA)") $
-        AnySerialized @TestEvA >>>
-        serializeAny >>>
-        deserializeAny >>>
-        extractPartial >>>
-        id @(Either String TestEvB)
+        isConst (ExtractTypeMismatch (TypeMismatch "TestEvB" "TestEvA")) $
+            AnySerialized @TestEvA >>>
+            serializeAny >>>
+            deserializeAny >>>
+            extractPartial >>>
+            id @(ExtractResult TestEvB)
+        
+
