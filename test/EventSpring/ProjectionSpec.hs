@@ -50,39 +50,14 @@ spec = do
             in
                 areEqualExceptForId oldAL newAL pId .&&.
                 lookup pId newAL === (Just newValue)
-        
-    describe "applyDeltaAnyAL" $ do
-        let areEqualExceptForId al1 al2 projId =
-                deleteProj projId al1 === deleteProj projId al2
-            deleteProj p = filter ((/=) p . fst)
-
-            nubAL = nubBy ((==) `on` fst)
-
-        it "Create inserts a new projected value" $ property $
-            \(rawOldAL :: [(A, B)]) (newId :: A) (newVal :: B) ->
-            let oldAL = nubAL rawOldAL
-                newAL = applyDeltaAL (Create newId newVal) oldAL
+    describe "deltasForEvent" $ do
+        it "Finds the Correct Deltas by type" $ property $
+            \(i :: Integer) ->
+            let projector = Projector [
+                        OnEvent (\(B x) -> []),
+                        OnEvent (\(A x) -> [Create (A x) (B x)])
+                    ]
+                unDelta (Create _ x) = x
             in
-                areEqualExceptForId oldAL newAL newId .&&.
-                lookup newId newAL === Just newVal
-
-        it "Update updates an existing value" $ property $
-            \(rawOldAL :: [(A, B)]) (pId :: A) (fn :: Fun B B) ->
-            let oldAL = nubAL rawOldAL
-                
-                newValue = (applyFun fn) <$> lookup pId oldAL
-                newAL = applyDeltaAL (Update pId (applyFun fn)) oldAL
-            in
-                areEqualExceptForId oldAL newAL pId .&&.
-                lookup pId newAL === newValue
-        
-        it "CreateOrUpdate updates an existing value or creates a new one" $ property $
-            \(rawOldAL :: [(A, B)]) (pId :: A) (newVal :: B) (fn :: Fun B B) ->
-            let oldAL = nubAL rawOldAL
-                
-                newValue = maybe newVal (applyFun fn) $ lookup pId oldAL
-                newAL = applyDeltaAL (CreateOrUpdate pId newVal (applyFun fn)) oldAL
-            in
-                areEqualExceptForId oldAL newAL pId .&&.
-                lookup pId newAL === (Just newValue)
+                [B i] === (unDelta <$> deltasForEvent projector (A i))
 

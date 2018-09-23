@@ -1,4 +1,5 @@
 {-# LANGUAGE ExistentialQuantification  #-}
+{-# LANGUAGE Rank2Types                 #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TypeFamilies               #-}
@@ -10,15 +11,19 @@ module EventSpring.Projection (
     Projector(..),
     
     AnyProjId(..),
-    mkAnyProjId, 
+    mkAnyProjId,
+    onAnyProjId,
     AnyProjection(..),
     mkAnyProjection, 
 
     toAnyDelta,
+    toAnyOnEvent,
     toAnyProjector,
 
     -- Projecting
     deltasForEvent,
+    idFromDelta,
+    applyDelta,
 
     -- Projecting for Unit-tests
     applyDeltaAL,
@@ -27,11 +32,12 @@ module EventSpring.Projection (
 
 import           Control.Arrow          (second)
 import           Data.ByteString        (ByteString)
-import           Data.Hashable          (Hashable)
+import           Data.Hashable          (Hashable, hash, hashWithSalt)
 import           Data.Semigroup         (Semigroup)
 import           Data.List              (partition)
-import           Data.Typeable          (TypeRep, Typeable, cast)
+import           Data.Typeable          (TypeRep, Typeable, cast, typeOf)
 import           Data.Maybe             (maybeToList, listToMaybe)
+import           Data.Traversable       (for)
 
 import           EventSpring.Serialized
 
@@ -42,6 +48,9 @@ data OnEvent onEvent = forall event. Serialized event =>
 
 instance Functor OnEvent where
     fmap f (OnEvent g) = OnEvent $ f . g
+
+instance (Show a, Typeable a) => Show (OnEvent a) where
+    show (OnEvent f) = "OnEvent (f :: " ++ show (typeOf f) ++ ")"
 
 -- Single-Projection projectors
 
@@ -54,16 +63,36 @@ data Delta projId =
     -- | Creates the prjection with id 'projId' or updates it if it already exists.
     CreateOrUpdate projId (ProjectionFor projId) (ProjectionFor projId -> ProjectionFor projId)
 
+instance (Show i) => Show (Delta i) where
+    show (Update i f) = "Update " ++ show i ++ " f"
+    show (Create i v) = "Create" ++ show i ++ " v"
+    show (CreateOrUpdate i v f) = "CreateOrUpdate " ++ show i ++ " v f"
+
 newtype Projector projId = Projector [OnEvent [Delta projId]]
     deriving (Semigroup, Monoid)
 
 -- Any-Projection Projectors
 
-newtype AnyProjId = AnyProjId { unAnyProjId :: AnyHashable }
-    deriving (Eq, Show, Hashable)
+data AnyProjId = forall i. (Serialized i, Hashable i, Serialized (ProjectionFor i)) => AnyProjId { unAnyProjId :: i }
 
-mkAnyProjId :: (Serialized a, Hashable a) => a -> AnyProjId
-mkAnyProjId = AnyProjId . AnyHashable
+instance Show AnyProjId where
+    show (AnyProjId c) = "AnyProjId {-" ++ show (typeOf c) ++ " hash:" ++ show (hash c) ++ "-} " ++ show (show c)
+
+instance Eq AnyProjId where
+    (AnyProjId a) == (AnyProjId b) = maybe False (a ==) bAsA
+        where
+            bAsA = cast b
+
+instance Hashable AnyProjId where
+    hashWithSalt seed (AnyProjId a) = hashWithSalt seed a
+    hash (AnyProjId a) = hash a
+
+mkAnyProjId :: (Serialized a, Hashable a, Serialized (ProjectionFor a)) => a -> AnyProjId
+mkAnyProjId = AnyProjId
+
+onAnyProjId :: AnyProjId -> (forall h. (Serialized h, Hashable h, Serialized (ProjectionFor h)) => h -> o) -> o
+onAnyProjId (AnyProjId d) f = f d
+
 
 newtype AnyProjection = AnyProjection { unAnyProjection :: AnySerialized }
     deriving (Eq, Show)
@@ -79,19 +108,27 @@ toAnyFunction f a = case castAny a of
                         (Just a) -> AnySerialized $ f a
 
 toAnyDelta :: (Serialized a, Eq a, Hashable a, Serialized (ProjectionFor a)) => Delta a -> Delta AnyProjId
-toAnyDelta (Create i v) = Create (AnyProjId $ AnyHashable i) (AnyProjection $ AnySerialized v)
-toAnyDelta (Update i f) = Update (AnyProjId  $ AnyHashable i) (AnyProjection . toAnyFunction f . unAnyProjection)
-toAnyDelta (CreateOrUpdate i v f) = CreateOrUpdate (AnyProjId $ AnyHashable i)
+toAnyDelta (Create i v) = Create (AnyProjId i) (AnyProjection $ AnySerialized v)
+toAnyDelta (Update i f) = Update (AnyProjId i) (AnyProjection . toAnyFunction f . unAnyProjection)
+toAnyDelta (CreateOrUpdate i v f) = CreateOrUpdate (AnyProjId i)
                                                    (AnyProjection $ AnySerialized v)
                                                    (AnyProjection . toAnyFunction f . unAnyProjection)
 
+toAnyOnEvent :: (Serialized a, Eq a, Hashable a, Serialized (ProjectionFor a)) => OnEvent [Delta a] -> OnEvent [Delta AnyProjId]
+toAnyOnEvent = fmap (fmap toAnyDelta)
+
 toAnyProjector :: (Serialized a, Hashable a, Serialized (ProjectionFor a)) => Projector a -> Projector AnyProjId 
-toAnyProjector (Projector oes) = Projector $ fmap (fmap toAnyDelta) <$> oes
+toAnyProjector (Projector oes) = Projector $ toAnyOnEvent <$> oes
 
 -- Projecting
 
-deltasForEvent :: Serialized event => Projector projId -> event -> [Delta projId]
-deltasForEvent = undefined
+deltasForEvent :: (Serialized event, Typeable projId, Show projId) => Projector projId -> event -> [Delta projId]
+deltasForEvent (Projector handlers) event = 
+    concat $ (flip fmap) handlers $ (\(OnEvent handler) ->
+        case cast event of
+            Nothing  -> []
+            (Just e) -> handler e
+    )
 
 -- Projecting for Unit Tests
 

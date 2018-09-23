@@ -27,8 +27,8 @@ spec = do
                 forM_ projIds readProjection
         it "Should record the read" $ property $
             \(projIds :: [A]) ->
-                let expectedWithVals = (\p -> ReadProjection (AnyHashable p) $ mkVersion 42) <$> (nub $ projIds)
-                    expectedWithoutVals = (\p -> ReadProjection (AnyHashable p) versionZero) <$> (nub $ projIds)
+                let expectedWithVals = (\p -> ReadProjection (AnyProjId p) $ mkVersion 42) <$> (nub $ projIds)
+                    expectedWithoutVals = (\p -> ReadProjection (AnyProjId p) versionZero) <$> (nub $ projIds)
                 in
                 conjoin [
                     unorderedEquals expectedWithVals $
@@ -44,20 +44,20 @@ spec = do
             \(events :: [TestEvA]) -> (AnyEvent <$> events ===) $
               toList $ trNewEvents $ snd $ runTestTransaction testContextWithoutValues $ do
                 forM_ events $ recordSingle
-{-        it "projections change according to new events" $ property $
-            \(events :: [TestEvA]) -> fst $ runTestTransaction testContextWithoutValues $ do
-                forM_ events $ recordSingle
+        it "projections change according to new events" $ property $
+            \(events :: [TestEvB]) -> fst $ runTestTransaction testContextWithoutValues $ do
+                record events
                 let distinctEvents = nub events
-                projProps <- forM distinctEvents $ \(TestEvA i) -> do
-                    (Just (TestProj cnt _)) <- readProjection $ A i
-                    pure $ cnt === (length $ filter (== (TestEvA i)) events)
+                projProps <- forM distinctEvents $ \(TestEvB i) -> do
+                    (Just (C cnt)) <- readProjection $ B i
+                    pure $ cnt === toInteger (length $ filter (== (TestEvB i)) events)
                 pure $ conjoin projProps
         it "new projections should be recorded" $ property $
-            \(events :: [TestEvA]) ->
+            \(events :: [TestEvB]) ->
                 let expectedNewProjs = expectedProj <$> nub events
-                    expectedProj (TestEvA e) = NewProjection
-                        (A e)
-                        (TestProj (2 + length (filter (== TestEvA e) events)) 2)
+                    expectedProj (TestEvB e) = NewProjection
+                        (mkAnyProjId (B e))
+                        (mkAnyProjection (C (toInteger (length (filter (== TestEvB e) events)))))
                     actualNewProjs = trNewProjs $ snd $ runTestTransaction testContextWithValues $
                         record events
                 in
@@ -65,4 +65,4 @@ spec = do
                     "expected: " ++ show expectedNewProjs ++
                     "\nactual:   " ++ show actualNewProjs
                 ) $ unorderedEquals expectedNewProjs actualNewProjs
--}
+

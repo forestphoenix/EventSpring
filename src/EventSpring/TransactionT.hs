@@ -4,6 +4,7 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE Strict                     #-}
 module EventSpring.TransactionT (
     TransactionContext,
@@ -38,24 +39,10 @@ type ProjReader m = forall projId.
     (Serialized projId, Serialized (ProjectionFor projId)) =>
     projId -> m (Maybe (ProjectionVersion, ProjectionFor projId))
 
-data NewProjection = forall projId.
-    (Serialized projId, Serialized (ProjectionFor projId)) =>
-    NewProjection projId (ProjectionFor projId)
+data NewProjection = NewProjection AnyProjId AnyProjection
+    deriving (Eq, Show)
 
-instance Eq NewProjection where
-    (NewProjection p1 v1) == (NewProjection p2 v2) = fromMaybe False $
-        (&&) <$> samePs <*> sameVs
-        where
-            samePs = (p1 ==) <$> Typeable.cast p2
-            sameVs = (v1 ==) <$> Typeable.cast v2
-
-instance Show NewProjection where
-    show (NewProjection p v) =
-        "NewProjection " ++
-        "{-" ++ show (Typeable.typeOf p) ++ "-} " ++ show (serialize p) ++
-        "{-" ++ show (Typeable.typeOf v) ++ "-} " ++ show (serialize v)
-
-data ReadProjection = ReadProjection AnyHashable ProjectionVersion
+data ReadProjection = ReadProjection AnyProjId ProjectionVersion
     deriving (Eq, Show)
 
 data TransactionContext md m = TransactionContext {
@@ -92,7 +79,7 @@ readCachedProjection TransactionState{..} projId =
     (collapseLookupAndCast . (fmap castToProj . snd) =<< M.lookup projId tsReadProjections)
         where
             castToProj (AnyProjection proj) = (castAny proj) :: Maybe proj
-            castNewProj (NewProjection _ proj) = Typeable.cast proj
+            castNewProj (NewProjection _ proj) = castToProj proj
 
             collapseLookupAndCast (Just Nothing) = Nothing
             collapseLookupAndCast Nothing        = Just Nothing
@@ -141,18 +128,25 @@ recordSingle :: (
     Monad m
     ) =>
     e -> TransactionT md m ()
-recordSingle event = undefined {- TransactionT $ do
+recordSingle event =  TransactionT $ do
     projector <- tcProjector <$> ask
-    let updates = changesForEvent projector event
-    newProjs <- forM updates $ \(Update projId f) -> do
-        proj <- unTransactionT $ readProjection projId
-        pure $ (AnyProjectionId projId, NewProjection projId $ f proj)
-    let insertNewProj (pId, newProj) = M.insert pId newProj
+    let deltas = deltasForEvent projector event
+    newProjs <- forM deltas $ \delta -> 
+        let anyProjId = idFromDelta delta
+        in
+            onAnyProjId anyProjId $ \projId -> do
+                mproj <- unTransactionT $ readProjection projId
+                let mproj' = applyDelta delta ((anyProjId, ) . mkAnyProjection <$> mproj)
+
+                pure $ ((anyProjId, ) . NewProjection anyProjId) . snd <$> mproj'
+
+    let insertNewProj (Just (pId, newProj)) = M.insert pId newProj
+        insertNewProj Nothing               = id
         insertAllProjs m = foldr insertNewProj m newProjs
     modify $ \ts@TransactionState{..} -> ts {
         tsNewEvents = tsNewEvents S.>< S.singleton (AnyEvent event),
         tsNewProjections = insertAllProjs tsNewProjections
-    }-}
+    }
 
 record :: (
     Serialized e,
@@ -182,5 +176,5 @@ stateToResult TransactionState{..} = TransactionResult {
         trReadProjs = M.foldrWithKey (\k v l -> (mkReadProj k v) : l ) [] tsReadProjections
     }
     where
-        mkReadProj (AnyProjId projId) (ver, _) = ReadProjection projId ver
+        mkReadProj projId (ver, _) = ReadProjection projId ver
 

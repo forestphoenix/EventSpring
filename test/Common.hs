@@ -58,8 +58,8 @@ instance ( Arbitrary p,
 
 instance Arbitrary AnyProjId where
     arbitrary = oneof [
-        (AnyProjId . AnyHashable) <$> (arbitrary :: Gen A),
-        (AnyProjId . AnyHashable) <$> (arbitrary :: Gen B)
+        AnyProjId <$> (arbitrary :: Gen A),
+        AnyProjId <$> (arbitrary :: Gen B)
         ]
 
 -- Test Projections & Ids
@@ -100,10 +100,13 @@ instance (Eq a, Show a, ToJSON a, FromJSON a, Typeable a) => Serialized a where
     deserialize = eitherDecode
 
 testProjector :: Projector AnyProjId
-testProjector = toAnyProjector $ Projector [
-    OnEvent $ \(TestEvA i) -> [
+testProjector = Projector [
+    toAnyOnEvent $ OnEvent $ \(TestEvA i) -> [
         Create (A i) (B 10)
-        ]
+        ],
+    toAnyOnEvent $ OnEvent $ \(TestEvB i) -> [
+        CreateOrUpdate (B i) (C 1) (\(C x) -> C $ x + 1)
+        ] 
     ]
 
 testContextWithoutValues :: Monad m => TransactionContext () (WriterT (Sum Int) m)
