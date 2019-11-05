@@ -3,11 +3,11 @@
 
 module EventSpring.ProjectionSpec (spec) where
 
-import           Data.Function        (on)
-import           Data.List            (deleteBy, lookup, nubBy)
-import           Data.Maybe           (maybe)
-import           Test.QuickCheck.Poly
+import           Data.Function            (on)
+import           Data.List                (deleteBy, lookup, nubBy)
+import           Data.Maybe               (maybe)
 import           Test.QuickCheck.Function (Fun, applyFun)
+import           Test.QuickCheck.Poly
 
 import           Common
 
@@ -34,17 +34,17 @@ spec = do
         it "Update updates an existing value" $ property $
             \(rawOldAL :: [(A, B)]) (pId :: A) (fn :: Fun B B) ->
             let oldAL = nubAL rawOldAL
-                
+
                 newValue = (applyFun fn) <$> lookup pId oldAL
                 newAL = applyDeltaAL (Update pId (applyFun fn)) oldAL
             in
                 areEqualExceptForId oldAL newAL pId .&&.
                 lookup pId newAL === newValue
-        
+
         it "CreateOrUpdate updates an existing value or creates a new one" $ property $
             \(rawOldAL :: [(A, B)]) (pId :: A) (newVal :: B) (fn :: Fun B B) ->
             let oldAL = nubAL rawOldAL
-                
+
                 newValue = maybe newVal (applyFun fn) $ lookup pId oldAL
                 newAL = applyDeltaAL (CreateOrUpdate pId newVal (applyFun fn)) oldAL
             in
@@ -60,4 +60,3 @@ spec = do
                 unDelta (Create _ x) = x
             in
                 [B i] === (unDelta <$> deltasForEvent projector (A i))
-

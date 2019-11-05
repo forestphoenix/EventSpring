@@ -1,14 +1,14 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeApplications    #-}
 module EventSpring.SerializedSpec where
 
-import Data.Either (fromRight, fromLeft)
-import EventSpring.Serialized
+import           Data.Either            (fromLeft, fromRight)
+import           EventSpring.Serialized
 
 import           Common
 
-fromExtractResult (ExtractOk a) = a
-fromExtractResult (ExtractError err) = error err
+fromExtractResult (ExtractOk a)                  = a
+fromExtractResult (ExtractError err)             = error err
 fromExtractResult (ExtractTypeMismatch mismatch) = error $ show mismatch
 
 spec :: Spec
@@ -28,5 +28,3 @@ spec = do
             deserializeAny >>>
             extractPartial >>>
             id @(ExtractResult TestEvB)
-        
-

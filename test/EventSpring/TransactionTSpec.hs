@@ -1,9 +1,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module EventSpring.TransactionTSpec where
 
-import           Control.Monad (forM_, forM)
+import           Control.Monad (forM, forM_)
 import           Data.Foldable (toList)
-import           Data.List     (sort, nub, filter)
+import           Data.List     (filter, nub, sort)
 import           Data.Typeable (cast)
 
 import           Common
@@ -49,8 +49,8 @@ spec = do
                 record events
                 let distinctEvents = nub events
                 projProps <- forM distinctEvents $ \(TestEvB i) -> do
-                    (Just (C cnt)) <- readProjection $ B i
-                    pure $ cnt === toInteger (length $ filter (== (TestEvB i)) events)
+                    cnt <- readProjection $ B i
+                    pure $ cnt === (Just . C . toInteger) (length $ filter (== (TestEvB i)) events)
                 pure $ conjoin projProps
         it "new projections should be recorded" $ property $
             \(events :: [TestEvB]) ->
@@ -65,4 +65,3 @@ spec = do
                     "expected: " ++ show expectedNewProjs ++
                     "\nactual:   " ++ show actualNewProjs
                 ) $ unorderedEquals expectedNewProjs actualNewProjs
-

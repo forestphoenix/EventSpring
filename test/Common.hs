@@ -52,7 +52,7 @@ instance ( Arbitrary p,
     arbitrary = oneof [
         Create <$> arbitrary <*> arbitrary,
         Update <$> arbitrary <*> (applyFun <$> arbitrary),
-        CreateOrUpdate <$> arbitrary <*> arbitrary <*> (applyFun <$> arbitrary) 
+        CreateOrUpdate <$> arbitrary <*> arbitrary <*> (applyFun <$> arbitrary)
         ]
     shrink = recursivelyShrink
 
