@@ -1,19 +1,21 @@
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE StandaloneDeriving        #-}
 module EventSpring.Serialized where
 
-import           Data.ByteString.Lazy as BS
+import           Data.ByteString.Lazy      as BS
 import           Data.ByteString.Lazy.UTF8 as BSU
 
-import Data.Semigroup ((<>))
-import Data.Maybe (maybe)
-import Data.Typeable (Typeable, TypeRep, Proxy(..), typeRep, typeOf, cast)
-import Data.Hashable (Hashable, hash, hashWithSalt)
+import           Data.Hashable             (Hashable, hash, hashWithSalt)
+import           Data.Maybe                (maybe)
+import           Data.Semigroup            ((<>))
+import           Data.Typeable             (Proxy (..), TypeRep, Typeable, cast,
+                                            typeOf, typeRep)
 
 class (Typeable content, Show content, Eq content) => Serialized content where
     serialize :: content -> BS.ByteString
     deserialize :: BS.ByteString -> Either String content
+
 
 data AnySerialized = forall a. Serialized a => AnySerialized a
 
@@ -63,7 +65,7 @@ data PartialDeserialized = PartialDeserialized String BS.ByteString
 
 data TypeMismatch = TypeMismatch {
     expectedType :: String,
-    actualType   :: String 
+    actualType   :: String
 } deriving (Eq, Show)
 
 data ExtractResult a = ExtractOk a | ExtractError String | ExtractTypeMismatch TypeMismatch
@@ -81,9 +83,8 @@ deserializeAny raw = PartialDeserialized typ dat
 extractPartial :: forall a. Serialized a => PartialDeserialized -> ExtractResult a
 extractPartial (PartialDeserialized typ dat) =  if typ == expectedType
         then toExtractResult $ deserialize dat
-        else ExtractTypeMismatch TypeMismatch { expectedType = expectedType, actualType = typ } 
+        else ExtractTypeMismatch TypeMismatch { expectedType = expectedType, actualType = typ }
     where
         expectedType = show $ typeRep (Proxy :: Proxy a)
         toExtractResult (Left err) = ExtractError err
-        toExtractResult (Right a) = ExtractOk a
-
+        toExtractResult (Right a)  = ExtractOk a

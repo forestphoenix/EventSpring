@@ -20,7 +20,6 @@ import           Data.Monoid
 import           Data.Typeable                     (Proxy (..), Typeable, cast,
                                                     typeOf, typeRep)
 import           Debug.Trace                       (trace)
-import           EventSpring.Serialized
 import           GHC.Generics                      (Generic)
 
 import           Control.Category                  as ReExport hiding (id, (.))
@@ -68,15 +67,22 @@ deriving instance Generic A
 deriving instance Hashable A
 instance ToJSON A
 instance FromJSON A
+instance ProjId A
+instance Projection A
 
 deriving instance Generic B
 deriving instance Hashable B
 instance ToJSON B
 instance FromJSON B
+instance ProjId B
+instance Projection B
 
 deriving instance Generic C
+deriving instance Hashable C
 instance ToJSON C
 instance FromJSON C
+instance ProjId C
+instance Projection C
 
 type instance ProjectionFor A = B
 type instance ProjectionFor B = C
@@ -86,14 +92,16 @@ type instance ProjectionFor B = C
 
 
 newtype TestEvA = TestEvA Integer
-    deriving (Eq, Show, Arbitrary, Generic, Typeable)
+    deriving (Eq, Show, Arbitrary, Generic, Typeable, Hashable)
 instance ToJSON TestEvA
 instance FromJSON TestEvA
+instance Event TestEvA
 
 newtype TestEvB = TestEvB Integer
-    deriving (Eq, Show, Arbitrary, Generic, Typeable)
+    deriving (Eq, Show, Arbitrary, Generic, Typeable, Hashable)
 instance ToJSON TestEvB
 instance FromJSON TestEvB
+instance Event TestEvB
 
 instance (Eq a, Show a, ToJSON a, FromJSON a, Typeable a) => Serialized a where
     serialize = encode
@@ -106,39 +114,37 @@ testProjector = Projector [
         ],
     toAnyOnEvent $ OnEvent $ \(TestEvB i) -> [
         CreateOrUpdate (B i) (C 1) (\(C x) -> C $ x + 1)
-        ] 
+        ]
     ]
 
-testContextWithoutValues :: Monad m => TransactionContext () (WriterT (Sum Int) m)
+testContextWithoutValues :: Monad m => TransactionContext (WriterT (Sum Int) m)
 testContextWithoutValues = mkTransactionContext
     (\projId -> do
         tell $ Sum 1
         pure Nothing
     )
     testProjector
-    ()
 
-testContextWithValues :: Monad m => TransactionContext () (WriterT (Sum Int) m)
+testContextWithValues :: Monad m => TransactionContext (WriterT (Sum Int) m)
 testContextWithValues = mkTransactionContext
     (\projId -> do
         tell $ Sum 1
         pure $ readValue $ typeOf projId
     )
     testProjector
-    ()
         where
             readValue ty
                 | ty == typeRep (Proxy :: Proxy A) = cast (mkVersion 42, B 2)
                 | otherwise                               = Nothing
 
 runTestTransaction ::
-    TransactionContext md (Writer (Sum Int)) ->
-    TransactionT md (Writer (Sum Int)) a -> (a, TransactionResult)
+    TransactionContext (Writer (Sum Int)) ->
+    TransactionT (Writer (Sum Int)) a -> (a, TransactionResult)
 runTestTransaction ctx tr = fst $ runWriter $ runTransactionT tr ctx
 
 countTestTransaction ::
-    TransactionContext md (Writer (Sum Int)) ->
-    TransactionT md (Writer (Sum Int)) a -> (a, Int)
+    TransactionContext (Writer (Sum Int)) ->
+    TransactionT (Writer (Sum Int)) a -> (a, Int)
 countTestTransaction ctx tr = repack $ runWriter $ runTransactionT tr ctx
     where
         repack ((result, _), Sum rs) = (result, rs)
@@ -147,4 +153,3 @@ unorderedEquals :: (Show a, Eq a) => [a] -> [a] -> Property
 unorderedEquals l1 l2 = property $
     length l1 === length l2 .&&.
     conjoin ((\i -> disjoin $ (=== i) <$> l1) <$> l2)
-
