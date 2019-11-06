@@ -28,8 +28,9 @@ serializeConduit = awaitForever $ \input -> do
         packet = lengthBS <> serialized <> BN.encode crc
     yield packet
 
-deserializeConduit :: (BS.ByteString -> BS.ByteString -> AnySerialized) -> ConduitT BS.ByteString AnySerialized m ()
-deserializeConduit = undefined
+deserializeConduit :: (SerializedType -> BS.ByteString -> Either String AnySerialized) -> ConduitT BS.ByteString AnySerialized m ()
+deserializeConduit lookupType = do
+    return ()
 
 separateChunks :: Monad m => ConduitT BS.ByteString BS.ByteString m ()
 separateChunks = do

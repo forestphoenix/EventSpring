@@ -1,3 +1,6 @@
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE UndecidableInstances #-}
+
 module EventSpring.EventLogSpec (spec) where
 
 import           Common
@@ -51,4 +54,11 @@ spec = do
 
 runSerialize list = runConduitPure $ CL.sourceList list .| serializeConduit .| C.sinkList
 
-runDeserialize list = runConduitPure $ CL.sourceList list .| deserializeConduit undefined .| C.sinkList
+deserializeInfo =
+    toAnyLookup (mkLookup :: TypeLookup TestEvB) <>
+    toAnyLookup (mkLookup :: TypeLookup TestEvA)
+
+runDeserialize list = runConduitPure $
+    CL.sourceList list .|
+    deserializeConduit (lookupType deserializeInfo) .|
+    C.sinkList

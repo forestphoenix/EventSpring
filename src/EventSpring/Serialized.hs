@@ -7,6 +7,7 @@ import           Data.ByteString.Lazy      as BS
 import           Data.ByteString.Lazy.UTF8 as BSU
 
 import           Data.Hashable             (Hashable, hash, hashWithSalt)
+import qualified Data.List                 as L
 import           Data.Maybe                (maybe)
 import           Data.Semigroup            ((<>))
 import           Data.Typeable             (Proxy (..), TypeRep, Typeable, cast,
@@ -60,7 +61,10 @@ serializeHashable (AnyHashable dat) =
     BS.singleton 0 <>
     serialize dat
 
-data PartialDeserialized = PartialDeserialized String BS.ByteString
+newtype SerializedType = SerializedType String
+    deriving (Eq, Ord, Show)
+
+data PartialDeserialized = PartialDeserialized SerializedType BS.ByteString
     deriving Show
 
 data TypeMismatch = TypeMismatch {
@@ -74,17 +78,43 @@ deriving instance Eq a => Eq (ExtractResult a)
 deriving instance Show a => Show (ExtractResult a)
 
 deserializeAny :: BS.ByteString -> PartialDeserialized
-deserializeAny raw = PartialDeserialized typ dat
+deserializeAny raw = PartialDeserialized (SerializedType typ) dat
     where
         dat = BS.drop 1 rawDat
         typ = toString rawTyp
         (rawTyp, rawDat) = BS.break (== 0) raw
 
 extractPartial :: forall a. Serialized a => PartialDeserialized -> ExtractResult a
-extractPartial (PartialDeserialized typ dat) =  if typ == expectedType
+extractPartial (PartialDeserialized (SerializedType typ) dat) =  if typ == expectedType
         then toExtractResult $ deserialize dat
         else ExtractTypeMismatch TypeMismatch { expectedType = expectedType, actualType = typ }
     where
         expectedType = show $ typeRep (Proxy :: Proxy a)
         toExtractResult (Left err) = ExtractError err
         toExtractResult (Right a)  = ExtractOk a
+
+
+newtype TypeLookup a = TypeLookup [(SerializedType, BS.ByteString -> Either String a)]
+
+instance Semigroup (TypeLookup a) where
+    (TypeLookup a) <> (TypeLookup b) = TypeLookup $ a <> b
+instance Monoid (TypeLookup a) where
+    mempty = TypeLookup []
+
+mkLookup :: forall a. Serialized a => TypeLookup a
+mkLookup = TypeLookup [(typeName, deserialize)]
+    where
+        typeName = SerializedType $ show $ typeRep (Proxy :: Proxy a)
+
+toAnyLookup :: Serialized a => TypeLookup a -> TypeLookup AnySerialized
+toAnyLookup (TypeLookup elems) = TypeLookup $ convert <$> elems
+    where
+        convert (typeName, deserialize) = (typeName, fmap AnySerialized <$> deserialize)
+
+lookupType :: TypeLookup a -> SerializedType -> BS.ByteString -> Either String a
+lookupType (TypeLookup elems) typ = \binary -> resDeserialize binary
+    where
+        resDeserialize bs  = case foundDeserialize of
+            Nothing -> Left $ "Not found in lookup, available types: " ++ show (fst <$> elems)
+            (Just d) -> d bs
+        foundDeserialize = L.lookup typ elems
