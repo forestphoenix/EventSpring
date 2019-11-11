@@ -31,11 +31,13 @@ library
         TypeFamilies
     build-depends:
         base,
-        binary, 
+        binary,
+        binary-conduit,
         bytestring,
         containers,
         conduit,
         digest,
+        exceptions, 
         hashable,
         text,
         transformers,

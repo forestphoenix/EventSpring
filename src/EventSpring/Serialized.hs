@@ -65,7 +65,7 @@ newtype SerializedType = SerializedType String
     deriving (Eq, Ord, Show)
 
 data PartialDeserialized = PartialDeserialized SerializedType BS.ByteString
-    deriving Show
+    deriving (Eq, Show)
 
 data TypeMismatch = TypeMismatch {
     expectedType :: String,
