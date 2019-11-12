@@ -9,6 +9,7 @@ import qualified Data.ByteString               as BS
 import           Data.Conduit                  as C
 import           Data.Conduit.Combinators      as C
 import           Data.Conduit.List             as CL
+import qualified Data.List                     as L (length, take)
 
 import           EventSpring.Internal.EventLog
 
@@ -43,7 +44,7 @@ spec = do
 
     describe "The Deserialization" $ do
         it "will deserialize an empty file to an empty sequence" $ do
-            deserialized <- runDeserialize []
+            deserialized <- runDeserialize [BS.pack []]
             deserialized `shouldBe` []
 
         it "can deserialize a single event" $ do
@@ -58,9 +59,22 @@ spec = do
             deserialized <- runDeserialize [BS.pack serializedA <> BS.pack serializedB]
             deserialized `shouldBe` [AnySerialized eventA, AnySerialized eventB]
 
-        xit "will detect an incorrect length" $ "this" `shouldBe` "TODO"
-        xit "will detect an incorrect crc" $ "this" `shouldBe` "TODO"
-    xit "the deserialization can read any serialized sequence" $ "this" `shouldBe` "TODO"
+        it "will detect an incorrect length" $ do
+            runDeserialize [BS.take 10 $ BS.pack serializedA] `shouldThrow` anyException
+
+        it "will detect an incorrect crc" $ do
+            let wrongCrc = L.take (L.length serializedA - 4) serializedA <> [1, 2, 3, 4]
+            runDeserialize [BS.pack wrongCrc] `shouldThrow` anyException
+
+    it "the deserialization can read any serialized sequence" $ property $
+        \(events :: [Either TestEvA TestEvB]) -> ioProperty $ do
+            let toAny (Left evA) = AnySerialized evA
+                toAny (Right evB) = AnySerialized evB
+                anyEvents = toAny <$> events
+            serialized <- runSerialize anyEvents
+            deserialized <- runDeserialize [mconcat serialized]
+            return $ counterexample ("Serialized: " ++ show serialized) $ anyEvents === deserialized
+
 
 runSerialize list = runConduit $ CL.sourceList list .| serializeConduit .| C.sinkList
 

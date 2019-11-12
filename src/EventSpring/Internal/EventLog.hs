@@ -56,6 +56,7 @@ serializeConduit = C.map (\dat -> SerializedEvent $ serializeAny dat) .| CBN.con
 
 deserializeConduit :: (Monad m, MonadThrow m) => (SerializedType -> BSL.ByteString -> Either String AnySerialized) -> ConduitT BS.ByteString AnySerialized m ()
 deserializeConduit lookupType =
+    C.filter (not . BS.null) .|
     CBN.conduitDecode .|
     C.map (\(SerializedEvent dat) -> deserializeAny dat) .|
     deserializeFully
