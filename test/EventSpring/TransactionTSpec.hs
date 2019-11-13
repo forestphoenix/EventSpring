@@ -11,7 +11,7 @@ import           Common
 spec :: Spec
 spec = do
     describe "reading without writes" $ do
-        it "A non-existant projection should not equal 'Nothing'" $ property $
+        it "A non-existant projection should equal 'Nothing'" $ property $
             \(projId :: A) -> (Nothing ===) $ fst $ runTestTransaction testContextWithoutValues $ do
                 readProjection projId
         it "A present projection has the stored value" $ property $
