@@ -10,4 +10,7 @@ ghcid-test: ## Have ghcid run the test suite for the wallet-new-specs on success
 	    --command "stack ghci event-spring:lib event-spring:test:event-spring-test --ghci-options=-fobject-code" \
 	    --test "main"
 
-.PHONY: ghcid ghcid-test help
+test:
+	stack test --coverage
+
+.PHONY: ghcid ghcid-test help test
