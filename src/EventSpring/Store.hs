@@ -17,17 +17,27 @@ data Store = Store {
   stProjector :: Projector AnyProjId
 }
 
+mkEmptyStore :: ([AnyEvent] -> IO ()) -> Projector AnyProjId -> IO Store
+mkEmptyStore writeEvents projector = do
+    projections <- newMVar M.empty
+    pure $ Store projections writeEvents projector
+
+tryCommitResults :: Store -> TransactionResult -> IO Bool
+tryCommitResults = undefined
+
+readStoredProjection :: (ProjId projId, Projection (ProjectionFor projId)) => Store -> projId -> IO (Maybe (ProjectionVersion, ProjectionFor projId))
+readStoredProjection store projId = do
+    projections <- readMVar $ stProjections store
+    let projMVar = M.lookup (AnyProjId projId) projections
+    case projMVar of
+        Nothing     -> pure Nothing
+        (Just mvar) -> convertSecond <$> readMVar mvar
+        where
+            convertSecond (a, b) = (,) a <$> convert b
+            convert (AnyProjection serialized) = castAny serialized
+
 runTransaction :: Store -> TransactionT IO a -> IO a
 runTransaction store transaction = undefined
 
 storeContext :: Store -> TransactionContext IO
-storeContext store = mkTransactionContext readProj $ stProjector store
-  where
-    readProj projId = do
-        projections <- readMVar $ stProjections store
-        let projMVar = M.lookup (AnyProjId projId) projections
-        case projMVar of
-            Nothing     -> pure Nothing
-            (Just mvar) -> convertSecond <$> readMVar mvar
-    convertSecond (a, b) = (,) a <$> convert b
-    convert (AnyProjection serialized) = castAny serialized
+storeContext store = mkTransactionContext (readStoredProjection store) (stProjector store)
