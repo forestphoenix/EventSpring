@@ -93,7 +93,6 @@ createProjections projMap projIds = modifyMVar projMap $ \currentProjs -> do
         then pure (currentProjs, Nothing)
         else do
             newMVars <- fmap M.fromList $ forM (H.toList projIds) $ \projId -> do
-                putStrLn $ "create mvar for " ++ show projId
                 mvar <- newEmptyMVar
                 pure (projId, mvar)
             pure (currentProjs <> newMVars, Just newMVars)
