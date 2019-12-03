@@ -26,7 +26,7 @@ instance Eq AnySerialized where
             bAsA = cast b
 
 instance Show AnySerialized where
-    show (AnySerialized c) = "AnySerialized {-" ++ show (typeOf c) ++ "-} " ++ show (show c)
+    show (AnySerialized c) = "AnySerialized {- " ++ show (typeOf c) ++ " -} " ++ show (show c)
 
 castAny :: Serialized a => AnySerialized -> Maybe a
 castAny (AnySerialized a) = cast a

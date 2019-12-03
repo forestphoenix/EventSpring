@@ -24,13 +24,10 @@ spec = do
             (store, _) <- mkTestStore
             runTransaction store $ do
                 recordSingle $ TestEvA 2
-            proj <- readStoredProjection store (A 0)
-            proj `shouldBe` Nothing
+            proj <- readStoredProjection store (A 2)
+            proj `shouldBe` Just (mkVersion 1, B 10)
 
-    xdescribe "(concurrent) calls to tryCommitResults" $ do
-        it "write the new projections to the store iff they were successful" $ "todo" `shouldBe` "completed"
-        it "write the new events to the store iff they were successful" $ "todo" `shouldBe` "completed"
-    xdescribe "concurrent calls to runTransaction" $ do
-        it "write all events in series" $ "todo" `shouldBe` "completed"
+    xdescribe "two concurrent calls to runTransaction" $ do
+        it "write all events & projections as if they were executed in series" $ "todo" `shouldBe` "completed"
 
 -- TODO: test for concurrency faults on the projection map

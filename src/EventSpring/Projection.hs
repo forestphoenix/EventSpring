@@ -85,7 +85,7 @@ newtype Projector projId = Projector [OnEvent [Delta projId]]
 data AnyProjId = forall i. (ProjId i, Projection (ProjectionFor i)) => AnyProjId { unAnyProjId :: i }
 
 instance Show AnyProjId where
-    show (AnyProjId c) = "AnyProjId {-" ++ show (typeOf c) ++ " hash:" ++ show (hash c) ++ "-} " ++ show (show c)
+    show (AnyProjId c) = "AnyProjId {- " ++ show (typeOf c) ++ " hash:" ++ show (hash c) ++ " -} " ++ show (show c)
 
 instance Eq AnyProjId where
     (AnyProjId a) == (AnyProjId b) = maybe False (a ==) bAsA
