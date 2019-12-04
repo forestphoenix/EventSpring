@@ -1,6 +1,7 @@
 module EventSpring.StoreSpec where
 
 import           Data.IORef
+import Control.Concurrent.Async
 
 import           Common
 import           EventSpring.Store
@@ -28,6 +29,20 @@ spec = do
             proj `shouldBe` Just (mkVersion 1, B 10)
 
     xdescribe "two concurrent calls to runTransaction" $ do
-        it "write all events & projections as if they were executed in series" $ "todo" `shouldBe` "completed"
+        it "write all events & projections as if they were executed in series" $ property $
+          \(eventsA :: [TestEvC]) (eventsB :: [TestEvC]) -> ioProperty $ do
+            (store, _) <- mkTestStore
+            writeA <- async $ runTransaction store $ record eventsA
+            writeB <- async $ runTransaction store $ record eventsB
+            wait writeA
+            wait writeB
+            results <- readStoredProjection store (C 0)
+            let resultProjection = snd <$> results
+            let resultVersion = fst <$> results
+            pure $
+                (resultProjection === Just (eventsA <> eventsB) .||.
+                resultProjection === Just (eventsB <> eventsA)) .&&.
+                resultVersion === Just (mkVersion 2)
+
 
 -- TODO: test for concurrency faults on the projection map

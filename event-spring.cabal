@@ -54,6 +54,7 @@ test-suite event-spring-test
       other-modules:       Common
       build-depends:
           base
+          , async
           , bytestring
           , conduit
           , event-spring

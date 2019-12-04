@@ -86,7 +86,7 @@ instance Projection C
 
 type instance ProjectionFor A = B
 type instance ProjectionFor B = C
-
+type instance ProjectionFor C = [TestEvC]
 
 -- Test Events
 
@@ -103,6 +103,13 @@ instance ToJSON TestEvB
 instance FromJSON TestEvB
 instance Event TestEvB
 
+newtype TestEvC = TestEvC Integer
+    deriving (Eq, Show, Arbitrary, Generic, Typeable, Hashable)
+instance ToJSON TestEvC
+instance FromJSON TestEvC
+instance Event TestEvC
+instance Projection [TestEvC]
+
 instance (Eq a, Show a, ToJSON a, FromJSON a, Typeable a) => Serialized a where
     serialize = encode
     deserialize = eitherDecode
@@ -114,6 +121,9 @@ testProjector = Projector [
         ],
     toAnyOnEvent $ OnEvent $ \(TestEvB i) -> [
         CreateOrUpdate (B i) (C 1) (\(C x) -> C $ x + 1)
+        ],
+    toAnyOnEvent $ OnEvent $ \(TestEvC i) -> [
+        CreateOrUpdate (C 0) [TestEvC i] (\ls -> (TestEvC i):ls)
         ]
     ]
 

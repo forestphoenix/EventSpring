@@ -11,9 +11,6 @@ import           Test.QuickCheck.Poly
 
 import           Common
 
-type instance ProjectionFor A = B
-type instance ProjectionFor B = C
-
 spec :: Spec
 spec = do
     describe "applyDeltaAL" $ do
