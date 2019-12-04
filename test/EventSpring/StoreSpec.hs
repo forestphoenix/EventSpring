@@ -43,6 +43,3 @@ spec = do
                 (resultProjection === Just (eventsA <> eventsB) .||.
                 resultProjection === Just (eventsB <> eventsA)) .&&.
                 resultVersion === Just (mkVersion 2)
-
-
--- TODO: test for concurrency faults on the projection map

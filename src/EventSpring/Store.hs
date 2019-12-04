@@ -80,11 +80,15 @@ transformValues existingValues newValues = M.mapWithKey updateExisting newValues
             Nothing             -> incrementVersion versionZero
 
 releaseAndWriteProjections ::
-    M.HashMap AnyProjId ((ProjectionVersion, AnyProjection), MVar (ProjectionVersion, AnyProjection)) ->
+    M.HashMap AnyProjId (dat, MVar dat) ->
     IO ()
 releaseAndWriteProjections toRelease = forM_ toRelease $ \(value, mvar) -> do
     putMVar mvar value
 
+createProjections ::
+    MVar (M.HashMap AnyProjId (MVar a)) ->
+    H.HashSet AnyProjId ->
+    IO (Maybe (M.HashMap AnyProjId (MVar a)))
 createProjections projMap projIds = modifyMVar projMap $ \currentProjs -> do
     let keysSet = H.fromList $ fst <$> M.toList currentProjs
         intersection = projIds `H.intersection` keysSet
@@ -98,9 +102,9 @@ createProjections projMap projIds = modifyMVar projMap $ \currentProjs -> do
             pure (currentProjs <> newMVars, Just newMVars)
 
 acquireProjections ::
-    M.HashMap AnyProjId (MVar (ProjectionVersion, AnyProjection)) ->
+    M.HashMap AnyProjId (MVar a) ->
     [AnyProjId] ->
-    IO (H.HashSet AnyProjId, M.HashMap AnyProjId ((ProjectionVersion, AnyProjection), MVar (ProjectionVersion, AnyProjection)))
+    IO (H.HashSet AnyProjId, M.HashMap AnyProjId (a, MVar a))
 acquireProjections projMap newProjs = do
     foundValues <- forM foundProjs $ \(projId, mvar) -> do
         value <- takeMVar mvar
