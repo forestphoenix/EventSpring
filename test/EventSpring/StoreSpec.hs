@@ -28,7 +28,7 @@ spec = do
             proj <- readStoredProjection store (A 2)
             proj `shouldBe` Just (mkVersion 1, B 10)
 
-    xdescribe "two concurrent calls to runTransaction" $ do
+    describe "two concurrent calls to runTransaction" $ do
         it "write all events & projections as if they were executed in series" $ property $
           \(eventsA :: [TestEvC]) (eventsB :: [TestEvC]) -> ioProperty $ do
             (store, _) <- mkTestStore
@@ -37,9 +37,12 @@ spec = do
             wait writeA
             wait writeB
             results <- readStoredProjection store (C 0)
-            let resultProjection = snd <$> results
-            let resultVersion = fst <$> results
+            let resultProjection = (reverse . snd) <$> results
+                resultVersion = fst <$> results
+                nonEmptyEventLists = length $ filter (not . null) [eventsA, eventsB]
+                noEventsWritten = nonEmptyEventLists == 0
             pure $
-                (resultProjection === Just (eventsA <> eventsB) .||.
+                ((resultProjection === Just (eventsA <> eventsB) .||.
                 resultProjection === Just (eventsB <> eventsA)) .&&.
-                resultVersion === Just (mkVersion 2)
+                (resultVersion === Just (mkVersion nonEmptyEventLists))) .||.
+                (noEventsWritten .&&. results === Nothing)
