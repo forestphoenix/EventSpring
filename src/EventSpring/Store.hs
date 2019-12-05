@@ -30,14 +30,12 @@ mkEmptyStore writeEvents projector = do
 tryCommitResults :: Store -> TransactionResult -> IO Bool
 tryCommitResults (Store {..}) result@(TransactionResult {..}) = do
     let newProjsMap = newProjsToMap trNewProjs
+        readProjsMap = readProjsToMap trReadProjs
     projMap <- readMVar stProjections
 
     (projsToCreate, existingProjections) <- acquireProjections projMap $ M.keys newProjsMap
 
-    -- TODO: check versions
-    let conflictOnExisting = False
-
-    if conflictOnExisting
+    if conflictOnExisting ((fst . fst) <$> existingProjections) readProjsMap
         then do
             releaseAndWriteProjections existingProjections
             pure False
@@ -58,6 +56,16 @@ tryCommitResults (Store {..}) result@(TransactionResult {..}) = do
     -- phase 2: atomically create new projections and lock them (or fail, if they already exist)
     -- phase 3: write new values (into both new and existing projections)
     -- phase 4: unlock the projections
+
+conflictOnExisting ::
+    M.HashMap AnyProjId ProjectionVersion ->
+    M.HashMap AnyProjId ProjectionVersion ->
+    Bool
+conflictOnExisting currentVersions readVersions = or $ hasConflict <$> M.toList readVersions
+    where
+        hasConflict (projId, version) = case M.lookup projId currentVersions of
+            Nothing               -> False
+            (Just currentVersion) -> currentVersion > version
 
 toWritableProjections ::
     M.HashMap AnyProjId dat ->
@@ -142,3 +150,8 @@ newProjsToMap :: [NewProjection] -> M.HashMap AnyProjId AnyProjection
 newProjsToMap projs = M.fromList $ toAny <$> projs
     where
         toAny (NewProjection projId projVal) = (projId, projVal)
+
+readProjsToMap :: [ReadProjection] -> M.HashMap AnyProjId ProjectionVersion
+readProjsToMap projs = M.fromList $ toAny <$> projs
+    where
+        toAny (ReadProjection projId projVer) = (projId, projVer)
