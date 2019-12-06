@@ -28,8 +28,16 @@ spec = do
             proj <- readStoredProjection store (A 2)
             proj `shouldBe` Just (mkVersion 1, B 10)
 
-    describe "two concurrent calls to runTransaction" $ do
-        it "write all events & projections as if they were executed in series" $ property $
+        it "the events written in a simple transation can be read" $ do
+            (store, events) <- mkTestStore
+            runTransaction store $ do
+                recordSingle $ TestEvA 2
+                record [TestEvB 1, TestEvB 2]
+            events <- readIORef events
+            events `shouldBe` [AnyEvent $ TestEvA 2, AnyEvent $ TestEvB 1, AnyEvent $ TestEvB 2]
+
+    describe "concurrent calls to runTransaction" $ do
+        it "two calls write all events & projections as if they were executed in series" $ property $
           \(eventsA :: [TestEvC]) (eventsB :: [TestEvC]) -> ioProperty $ do
             (store, _) <- mkTestStore
             writeA <- async $ runTransaction store $ record eventsA
