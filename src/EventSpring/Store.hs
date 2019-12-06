@@ -7,6 +7,7 @@ import           Control.Concurrent.MVar
 import           Control.Monad            (forM, forM_, unless)
 import           Control.Monad.Logger
 import           Data.Either              (partitionEithers)
+import           Data.Foldable            (toList)
 import qualified Data.HashMap.Strict      as M
 import qualified Data.HashSet             as H
 import qualified Data.Sequence            as S
@@ -46,6 +47,7 @@ tryCommitResults (Store {..}) result@(TransactionResult {..}) = do
                     let projections = (snd <$> existingProjections) <> newProjs
                         newValuesMap = transformValues (fst <$> existingProjections) newProjsMap
                         toWrite = toWritableProjections newValuesMap projections
+                    stWriteEvents $ toList trNewEvents
                     releaseAndWriteProjections toWrite
                     pure True
                 Nothing -> do
