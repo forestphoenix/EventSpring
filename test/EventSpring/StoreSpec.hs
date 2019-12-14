@@ -28,7 +28,7 @@ spec = do
             proj <- readStoredProjection store (A 2)
             proj `shouldBe` Just (mkVersion 1, B 10)
 
-        it "the events written in a simple transation can be read" $ do
+        it "the events written in a simple transation are written to the store" $ do
             (store, events) <- mkTestStore
             runTransaction store $ do
                 recordSingle $ TestEvA 2

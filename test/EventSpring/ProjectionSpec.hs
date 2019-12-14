@@ -11,6 +11,9 @@ import           Test.QuickCheck.Poly
 
 import           Common
 
+instance Event A
+instance Event B
+
 spec :: Spec
 spec = do
     describe "applyDeltaAL" $ do

@@ -34,7 +34,7 @@ module EventSpring.Projection (
 ) where
 
 import           Control.Arrow          (second)
-import           Data.ByteString        (ByteString)
+import qualified Data.ByteString.Lazy   as BS
 import           Data.Hashable          (Hashable, hash, hashWithSalt)
 import           Data.List              (partition)
 import           Data.Maybe             (listToMaybe, maybeToList)
@@ -42,17 +42,10 @@ import           Data.Semigroup         (Semigroup)
 import           Data.Traversable       (for)
 import           Data.Typeable          (TypeRep, Typeable, cast, typeOf)
 
+import           EventSpring.Common
 import           EventSpring.Serialized
 
-type family ProjectionFor projId
-
-class Serialized event => Event event
-
-class Serialized proj => Projection proj
-
-class (Serialized projId, Hashable projId) => ProjId projId
-
-data OnEvent onEvent = forall event. Serialized event =>
+data OnEvent onEvent = forall event. Event event =>
     OnEvent (event -> onEvent)
 
 instance Functor OnEvent where
@@ -82,46 +75,20 @@ newtype Projector projId = Projector [OnEvent [Delta projId]]
 
 -- Any-Projection Projectors
 
-data AnyProjId = forall i. (ProjId i, Projection (ProjectionFor i)) => AnyProjId { unAnyProjId :: i }
-
-instance Show AnyProjId where
-    show (AnyProjId c) = "AnyProjId {- " ++ show (typeOf c) ++ " hash:" ++ show (hash c) ++ " -} " ++ show (show c)
-
-instance Eq AnyProjId where
-    (AnyProjId a) == (AnyProjId b) = maybe False (a ==) bAsA
-        where
-            bAsA = cast b
-
-instance Hashable AnyProjId where
-    hashWithSalt seed (AnyProjId a) = hashWithSalt seed a
-    hash (AnyProjId a) = hash a
-
-mkAnyProjId :: (ProjId a, Projection (ProjectionFor a)) => a -> AnyProjId
-mkAnyProjId = AnyProjId
-
 onAnyProjId :: AnyProjId -> (forall h. (ProjId h, Projection (ProjectionFor h)) => h -> o) -> o
 onAnyProjId (AnyProjId d) f = f d
 
-
-newtype AnyProjection = AnyProjection { unAnyProjection :: AnySerialized }
-    deriving (Eq, Show)
-
-mkAnyProjection :: Projection a => a -> AnyProjection
-mkAnyProjection = AnyProjection . AnySerialized
-
-type instance ProjectionFor AnyProjId = AnyProjection
-
-toAnyFunction :: Serialized a => (a -> a) -> AnySerialized -> AnySerialized
-toAnyFunction f a = case castAny a of
+unsafeToAnyFunction :: Serialized a => (a -> a) -> AnySerialized -> AnySerialized
+unsafeToAnyFunction f a = case castAny a of
                         Nothing  -> error "todo"
                         (Just a) -> AnySerialized $ f a
 
 toAnyDelta :: (ProjId a, Projection (ProjectionFor a)) => Delta a -> Delta AnyProjId
 toAnyDelta (Create i v) = Create (AnyProjId i) (AnyProjection $ AnySerialized v)
-toAnyDelta (Update i f) = Update (AnyProjId i) (AnyProjection . toAnyFunction f . unAnyProjection)
+toAnyDelta (Update i f) = Update (AnyProjId i) (AnyProjection . unsafeToAnyFunction f . unAnyProjection)
 toAnyDelta (CreateOrUpdate i v f) = CreateOrUpdate (AnyProjId i)
                                                    (AnyProjection $ AnySerialized v)
-                                                   (AnyProjection . toAnyFunction f . unAnyProjection)
+                                                   (AnyProjection . unsafeToAnyFunction f . unAnyProjection)
 
 toAnyOnEvent :: (ProjId a, Projection (ProjectionFor a)) => OnEvent [Delta a] -> OnEvent [Delta AnyProjId]
 toAnyOnEvent = fmap (fmap toAnyDelta)
@@ -166,3 +133,8 @@ applyDeltaAL delta al = maybeToList newVal ++ others
 runEventAL :: (Event event, ProjId projId, Projection (ProjectionFor projId)) =>
     Projector projId -> event -> [(projId, ProjectionFor projId)] -> [(projId, ProjectionFor projId)]
 runEventAL projector event = foldl (.) id (applyDeltaAL <$> (deltasForEvent projector event))
+
+-- Deserializing events
+
+getDeserializer :: OnEvent a -> (SerializedType, BS.ByteString -> AnyEvent)
+getDeserializer = undefined
