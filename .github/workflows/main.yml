@@ -1,7 +1,5 @@
 name: CI
 
-on: [push]
-
 on:
   push:
   schedule:
@@ -20,7 +18,7 @@ jobs:
         # - { build: stack, resolver: "--resolver lts-13"  }  redundant because lts-14 checks ghc-8.6 already
         - { build: stack, resolver: "--resolver lts-14"  }   # ghc-8.6.5
         - { build: stack, resolver: "--resolver nightly" }
-        - { build: stack, resolver: ""                   }currently not working for >= 3.0
+        - { build: stack, resolver: ""                   } 
         # use this to include any dependencies from OS package managers
         include: []
 
