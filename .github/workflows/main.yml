@@ -1,0 +1,15 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Stack Image
+      uses: ynishi/github-actions-stack-docker-action@v1.1
+      with:
+        # Command for stack
+        command: make test
