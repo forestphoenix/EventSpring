@@ -13,6 +13,8 @@ import qualified Data.List                     as L (length, take)
 
 import           EventSpring.Internal.EventLog
 
+import EventSpring.TypeLookup
+
 spec :: Spec
 spec = do
     let eventA = TestEvA 42

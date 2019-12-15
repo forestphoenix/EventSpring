@@ -1,6 +1,7 @@
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE StandaloneDeriving        #-}
+{-# LANGUAGE ExistentialQuantification  #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 module EventSpring.Serialized where
 
 import           Data.ByteString.Lazy      as BS
@@ -62,7 +63,7 @@ serializeHashable (AnyHashable dat) =
     serialize dat
 
 newtype SerializedType = SerializedType String
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord, Show, Hashable)
 
 data PartialDeserialized = PartialDeserialized SerializedType BS.ByteString
     deriving (Eq, Show)
@@ -92,29 +93,3 @@ extractPartial (PartialDeserialized (SerializedType typ) dat) =  if typ == expec
         expectedType = show $ typeRep (Proxy :: Proxy a)
         toExtractResult (Left err) = ExtractError err
         toExtractResult (Right a)  = ExtractOk a
-
-
-newtype TypeLookup a = TypeLookup [(SerializedType, BS.ByteString -> Either String a)]
-
-instance Semigroup (TypeLookup a) where
-    (TypeLookup a) <> (TypeLookup b) = TypeLookup $ a <> b
-instance Monoid (TypeLookup a) where
-    mempty = TypeLookup []
-
-mkLookup :: forall a. Serialized a => TypeLookup a
-mkLookup = TypeLookup [(typeName, deserialize)]
-    where
-        typeName = SerializedType $ show $ typeRep (Proxy :: Proxy a)
-
-toAnyLookup :: Serialized a => TypeLookup a -> TypeLookup AnySerialized
-toAnyLookup (TypeLookup elems) = TypeLookup $ convert <$> elems
-    where
-        convert (typeName, deserialize) = (typeName, fmap AnySerialized <$> deserialize)
-
-lookupType :: TypeLookup a -> SerializedType -> BS.ByteString -> Either String a
-lookupType (TypeLookup elems) typ = \binary -> resDeserialize binary
-    where
-        resDeserialize bs  = case foundDeserialize of
-            Nothing -> Left $ "Not found in lookup, available types: " ++ show (fst <$> elems)
-            (Just d) -> d bs
-        foundDeserialize = L.lookup typ elems

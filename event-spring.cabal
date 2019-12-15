@@ -22,6 +22,7 @@ library
         EventSpring.TransactionT
         EventSpring.Common
         EventSpring.Store
+        EventSpring.TypeLookup
 
         EventSpring.Internal.EventLog
 

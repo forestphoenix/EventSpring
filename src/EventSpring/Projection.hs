@@ -11,6 +11,7 @@ module EventSpring.Projection (
 
     OnEvent(..),
     Delta(..),
+    noDeltas,
     Projector(..),
 
     AnyProjId(..),
@@ -36,11 +37,13 @@ module EventSpring.Projection (
 import           Control.Arrow          (second)
 import qualified Data.ByteString.Lazy   as BS
 import           Data.Hashable          (Hashable, hash, hashWithSalt)
+import qualified Data.HashMap.Strict    as M
 import           Data.List              (partition)
 import           Data.Maybe             (listToMaybe, maybeToList)
 import           Data.Semigroup         (Semigroup)
 import           Data.Traversable       (for)
 import           Data.Typeable          (TypeRep, Typeable, cast, typeOf)
+import           Data.Void              (Void)
 
 import           EventSpring.Common
 import           EventSpring.Serialized
@@ -72,6 +75,9 @@ instance (Show i) => Show (Delta i) where
 
 newtype Projector projId = Projector [OnEvent [Delta projId]]
     deriving (Semigroup, Monoid)
+
+noDeltas :: [Delta Void]
+noDeltas = []
 
 -- Any-Projection Projectors
 
@@ -134,7 +140,12 @@ runEventAL :: (Event event, ProjId projId, Projection (ProjectionFor projId)) =>
     Projector projId -> event -> [(projId, ProjectionFor projId)] -> [(projId, ProjectionFor projId)]
 runEventAL projector event = foldl (.) id (applyDeltaAL <$> (deltasForEvent projector event))
 
--- Deserializing events
 
-getDeserializer :: OnEvent a -> (SerializedType, BS.ByteString -> AnyEvent)
-getDeserializer = undefined
+instance Serialized Void where
+    serialize = error "serialize called on unihabited type 'Void'"
+    deserialize = error "deserialize called on unihabited type 'Void'"
+
+instance Event Void
+instance ProjId Void
+instance Projection Void
+type instance ProjectionFor Void = Void
