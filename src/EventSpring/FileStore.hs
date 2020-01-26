@@ -34,8 +34,7 @@ mkFileStore lookupType fileName projector = do
 
     writeThread <- async $ writeEvents fileName eventsToWrite
 
-
-    undefined
+    pure $ FileStore store
 
 writeEvents :: FilePath -> Chan (WriteMsg AnyEvent) -> IO ()
 writeEvents fileName eventsToWrite = C.runResourceT $ C.runConduit $
