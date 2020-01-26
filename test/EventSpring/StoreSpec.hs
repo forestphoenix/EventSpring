@@ -81,3 +81,12 @@ spec = do
               recordedEventsRecord <- runTransaction storeRecord $ readProjection (C 0)
 
               pure $ recordedEventsRaw === recordedEventsRecord
+
+        it "does not write any events" $ property $
+          \(events :: [TestEvC]) -> ioProperty $ do
+              (store, eventRef) <- mkTestStore
+
+              applyEventsRaw store (AnyEvent <$> events)
+
+              recordedEvents <- readIORef eventRef
+              pure $ [] === recordedEvents

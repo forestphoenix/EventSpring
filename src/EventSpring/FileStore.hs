@@ -6,7 +6,8 @@ import           Control.Concurrent.Chan
 import           Control.Monad                 (forM_)
 import qualified Data.ByteString.Lazy          as BS
 import qualified Data.Conduit.Combinators      as C
-import           System.IO                     (FilePath, IOMode (..), openFile)
+import           System.IO                     (FilePath, IOMode (..),
+                                                openBinaryFile)
 
 import           EventSpring.Common
 import           EventSpring.Internal.EventLog
@@ -42,7 +43,7 @@ writeEvents fileName eventsToWrite = C.runResourceT $ C.runConduit $
     serializeConduit C..|
     C.sinkIOHandle openEventLog
         where
-            openEventLog = openFile fileName AppendMode
+            openEventLog = openBinaryFile fileName AppendMode
             nextEvent = do
                 toWrite <- C.liftIO $ readChan eventsToWrite
                 case toWrite of
