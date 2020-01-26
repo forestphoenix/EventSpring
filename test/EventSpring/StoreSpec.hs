@@ -69,13 +69,13 @@ spec = do
                 writtenEvents === fmap AnyEvent (eventsB <> eventsA))
 
     describe "applyEventRaw" $ do
-        it "modfies the projections like (runTransation store  . recordSingle)" $ property $
+        it "modfies the projections like (runTransation store  . record)" $ property $
           \(events :: [TestEvC]) -> ioProperty $ do
               (storeRaw, _) <- mkTestStore
               (storeRecord, _) <- mkTestStore
 
-              forM_ events (\event -> applyEventRaw storeRaw (AnyEvent event))
-              forM_ events (\event -> (runTransaction storeRecord . recordSingle) event)
+              applyEventsRaw storeRaw (AnyEvent <$> events)
+              (runTransaction storeRecord . record) events
 
               recordedEventsRaw <- runTransaction storeRaw $ readProjection (C 0)
               recordedEventsRecord <- runTransaction storeRecord $ readProjection (C 0)

@@ -30,7 +30,7 @@ mkFileStore lookupType fileName projector = do
     C.withSourceFile fileName $ \fileConduit -> C.runConduit $
         fileConduit C..|
         deserializeConduit lookupType C..|
-        C.awaitForever (\event -> C.liftIO $ applyEventRaw store event)
+        C.awaitForever (\event -> C.liftIO $ applyEventsRaw store [event]) -- this is horribly inefficient.
 
     writeThread <- async $ writeEvents fileName eventsToWrite
 
