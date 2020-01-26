@@ -24,10 +24,10 @@ mkLookup = TypeLookup $ M.singleton typeName deserialize
     where
         typeName = SerializedType $ show $ typeRep (Proxy :: Proxy a)
 
-toAnyLookup :: Serialized a => TypeLookup a -> TypeLookup AnySerialized
-toAnyLookup (TypeLookup elems) = TypeLookup $ convert <$> elems
+toEventLookup :: Event a => TypeLookup a -> TypeLookup AnyEvent
+toEventLookup (TypeLookup elems) = TypeLookup $ convert <$> elems
     where
-        convert deserialize = fmap AnySerialized <$> deserialize
+        convert deserialize = fmap AnyEvent <$> deserialize
 
 lookupType :: TypeLookup a -> SerializedType -> BS.ByteString -> Either String a
 lookupType (TypeLookup elems) typ = \binary -> resDeserialize binary

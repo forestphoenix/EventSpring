@@ -22,6 +22,7 @@ library
         EventSpring.TransactionT
         EventSpring.Common
         EventSpring.Store
+        EventSpring.FileStore
         EventSpring.TypeLookup
 
         EventSpring.Internal.EventLog
@@ -31,6 +32,7 @@ library
         ExistentialQuantification,
         TypeFamilies
     build-depends:
+        async,
         base,
         binary,
         binary-conduit,

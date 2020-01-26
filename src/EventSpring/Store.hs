@@ -28,6 +28,16 @@ mkEmptyStore writeEvents projector = do
     projections <- newMVar M.empty
     pure $ Store projections writeEvents projector
 
+-- ! This Should only be run before any concurrent access to the event store
+applyEventRaw :: Store -> AnyEvent -> IO ()
+applyEventRaw store@(Store {..}) (AnyEvent event) = do
+    (out, result) <- runTransactionT (recordSingle event) $ storeContext store
+    let resultWithoutEvents = TransactionResult S.empty (trNewProjs result) (trReadProjs result)
+    ok <- tryCommitResults store resultWithoutEvents
+    if ok
+        then pure ()
+        else error "applyEventRaw: failed to commit results (is the store in use?)"
+
 tryCommitResults :: Store -> TransactionResult -> IO Bool
 tryCommitResults (Store {..}) result@(TransactionResult {..}) = do
     let newProjsMap = newProjsToMap trNewProjs

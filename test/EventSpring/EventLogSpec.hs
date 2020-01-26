@@ -51,15 +51,15 @@ spec = do
 
         it "can deserialize a single event" $ do
             deserialized <- runDeserialize [BS.pack serializedA]
-            deserialized `shouldBe` [AnySerialized eventA]
+            deserialized `shouldBe` [AnyEvent eventA]
 
         it "can deserialize multiple events" $ do
             deserialized <- runDeserialize [BS.pack serializedA, BS.pack serializedB]
-            deserialized `shouldBe` [AnySerialized eventA, AnySerialized eventB]
+            deserialized `shouldBe` [AnyEvent eventA, AnyEvent eventB]
 
         it "can deserialize multiple events concatenated together" $ do
             deserialized <- runDeserialize [BS.pack serializedA <> BS.pack serializedB]
-            deserialized `shouldBe` [AnySerialized eventA, AnySerialized eventB]
+            deserialized `shouldBe` [AnyEvent eventA, AnyEvent eventB]
 
         it "will detect an incorrect length" $ do
             runDeserialize [BS.take 10 $ BS.pack serializedA] `shouldThrow` anyException
@@ -75,14 +75,15 @@ spec = do
                 anyEvents = toAny <$> events
             serialized <- runSerialize anyEvents
             deserialized <- runDeserialize [mconcat serialized]
-            return $ counterexample ("Serialized: " ++ show serialized) $ anyEvents === deserialized
+            let demotedDeserialized = (\(AnyEvent e) -> AnySerialized e) <$> deserialized
+            return $ counterexample ("Serialized: " ++ show serialized) $ anyEvents === demotedDeserialized
 
 
 runSerialize list = runConduit $ CL.sourceList list .| serializeConduit .| C.sinkList
 
 deserializeInfo =
-    toAnyLookup (mkLookup :: TypeLookup TestEvB) <>
-    toAnyLookup (mkLookup :: TypeLookup TestEvA)
+    toEventLookup (mkLookup :: TypeLookup TestEvB) <>
+    toEventLookup (mkLookup :: TypeLookup TestEvA)
 
 runDeserialize list = runConduit $
     CL.sourceList list .|

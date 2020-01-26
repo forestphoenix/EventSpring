@@ -14,6 +14,7 @@ import qualified Data.Conduit.Serialization.Binary as CBN
 import qualified Data.Digest.CRC32                 as CRC
 import           Data.Word                         (Word32, Word64)
 
+import           EventSpring.Common
 import           EventSpring.Serialized
 
 {-
@@ -54,7 +55,7 @@ instance BN.Binary SerializedEvent where
 serializeConduit :: (Monad m, MonadThrow m) => ConduitT AnySerialized BS.ByteString m ()
 serializeConduit = C.map (\dat -> SerializedEvent $ serializeAny dat) .| CBN.conduitEncode
 
-deserializeConduit :: (Monad m, MonadThrow m) => (SerializedType -> BSL.ByteString -> Either String AnySerialized) -> ConduitT BS.ByteString AnySerialized m ()
+deserializeConduit :: (Monad m, MonadThrow m) => (SerializedType -> BSL.ByteString -> Either String AnyEvent) -> ConduitT BS.ByteString AnyEvent m ()
 deserializeConduit lookupType =
     C.filter (not . BS.null) .|
     CBN.conduitDecode .|
