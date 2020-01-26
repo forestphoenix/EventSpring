@@ -13,4 +13,7 @@ ghcid-test: ## Have ghcid run the test suite for the wallet-new-specs on success
 test:
 	stack test --coverage
 
-.PHONY: ghcid ghcid-test help test
+clean:
+	stack clean
+
+.PHONY: ghcid ghcid-test help test clean
