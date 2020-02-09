@@ -28,7 +28,7 @@ spec = do
             forM projIds $ \projId -> readProjection projId
         closeFileStore loadedStore
 
-        pure $ counterexample file $ originalProjections === loadedProjections
+        pure $ originalProjections === loadedProjections
 
     xit "will have updated projections if the file is opened with a differen projector" $ do
         putStrLn $ "TODO"
