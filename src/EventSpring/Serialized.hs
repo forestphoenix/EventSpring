@@ -39,29 +39,6 @@ serializeAny (AnySerialized dat) =
     serialize dat
 
 
-data AnyHashable = forall a. (Serialized a, Hashable a) => AnyHashable a
-
-instance Show AnyHashable where
-    show (AnyHashable c) = "AnyHashable {-" ++ show (typeOf c) ++ " hash:" ++ show (hash c) ++ "-} " ++ show (show c)
-
-instance Eq AnyHashable where
-    (AnyHashable a) == (AnyHashable b) = maybe False (a ==) bAsA
-        where
-            bAsA = cast b
-
-instance Hashable AnyHashable where
-    hashWithSalt seed (AnyHashable a) = hashWithSalt seed a
-    hash (AnyHashable a) = hash a
-
-castHashable :: Serialized a => AnyHashable -> Maybe a
-castHashable (AnyHashable a) = cast a
-
-serializeHashable :: AnyHashable -> BS.ByteString
-serializeHashable (AnyHashable dat) =
-    BSU.fromString (show $ typeOf dat) <>
-    BS.singleton 0 <>
-    serialize dat
-
 newtype SerializedType = SerializedType String
     deriving (Eq, Ord, Show, Hashable)
 
