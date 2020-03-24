@@ -27,7 +27,7 @@ spec = do
         loadedProjections <- runFileTransaction loadedStore $ do
             forM projIds $ \projId -> readProjection projId
         closeFileStore loadedStore
-
+ 
         pure $ originalProjections === loadedProjections
 
     xit "will have updated projections if the file is opened with a differen projector" $ do
