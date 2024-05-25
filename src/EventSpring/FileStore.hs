@@ -16,6 +16,7 @@ import           EventSpring.Projection
 import           EventSpring.Serialized
 import           EventSpring.Store
 import           EventSpring.TransactionT
+import           EventSpring.TypeLookup
 
 import GHC.Stack
 
@@ -30,12 +31,12 @@ data WriteMsg event = WriteEvents [event] | FinishWrites
 -- Warning: Since we are dealing with impure code here,
 -- anything more complex than trivial should be refactored.
 
-mkFileStore :: HasCallStack => (SerializedType -> BS.ByteString -> Either String AnyEvent) -> FilePath -> Projector AnyProjId -> IO FileStore
+mkFileStore :: HasCallStack => (SerializedType -> BS.ByteString -> Either DeserializeFailed AnyEvent) -> FilePath -> Projector AnyProjId -> IO FileStore
 mkFileStore lookupType fileName projector = do
     eventsToWrite <- newChan
 
-    let eventsToChan events = writeChan eventsToWrite $ WriteEvents events
-    store <- mkEmptyStore eventsToChan projector
+    let eventsToChan events _ = writeChan eventsToWrite $ WriteEvents events
+    store <- mkEmptyStore (WriteNewEvents eventsToChan) projector
 
     storeAlreadyPresent <- doesFileExist fileName
     when storeAlreadyPresent $ C.withSourceFile fileName $ \fileConduit -> C.runConduit $

@@ -18,4 +18,4 @@ spec = do
             let projector = Projector [ toAnyOnEvent $ OnEvent $ \(TestEvA i) -> noDeltas
                                       , toAnyOnEvent $ OnEvent $ \(TestEvB i) -> noDeltas ]
                 (TypeLookup typeMap) = lookupFromProjector projector
-            M.keys typeMap `shouldBe` [SerializedType "TestEvA", SerializedType "TestEvB"]
+            M.keys typeMap `shouldBe` [SerializedType "TestEvB", SerializedType "TestEvA"]

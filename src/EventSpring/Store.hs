@@ -17,13 +17,16 @@ import           EventSpring.Projection
 import           EventSpring.Serialized
 import           EventSpring.TransactionT
 
+-- Write new events and updated projections
+newtype WriteNewEvents = WriteNewEvents { unWriteNewEvents :: ([AnyEvent] -> [NewProjection] -> IO ()) }
+
 data Store = Store {
   stProjections :: MVar (M.HashMap AnyProjId (MVar (ProjectionVersion, AnyProjection))),
-  stWriteEvents :: [AnyEvent] -> IO (),
+  stWriteEvents :: WriteNewEvents, -- Write new events and updated projections
   stProjector :: Projector AnyProjId
 }
 
-mkEmptyStore :: ([AnyEvent] -> IO ()) -> Projector AnyProjId -> IO Store
+mkEmptyStore :: WriteNewEvents -> Projector AnyProjId -> IO Store
 mkEmptyStore writeEvents projector = do
     projections <- newMVar M.empty
     pure $ Store projections writeEvents projector
@@ -59,7 +62,7 @@ tryCommitResults (Store {..}) result@(TransactionResult {..}) = do
                     let projections = (snd <$> existingProjections) <> newProjs
                         newValuesMap = transformValues (fst <$> existingProjections) newProjsMap
                         toWrite = toWritableProjections newValuesMap projections
-                    stWriteEvents $ toList trNewEvents
+                    (unWriteNewEvents stWriteEvents) (toList trNewEvents) trNewProjs
                     releaseAndWriteProjections toWrite
                     pure True
                 Nothing -> do

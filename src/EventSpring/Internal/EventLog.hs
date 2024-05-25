@@ -2,7 +2,7 @@
 
 module EventSpring.Internal.EventLog where
 
-import           Control.Monad.Catch               (MonadThrow)
+import           Control.Monad.Catch               (MonadThrow, throwM)
 import qualified Data.Binary                       as BN
 import qualified Data.Binary.Get                   as BN
 import qualified Data.Binary.Put                   as BN
@@ -16,6 +16,7 @@ import           Data.Word                         (Word32, Word64)
 
 import           EventSpring.Common
 import           EventSpring.Serialized
+import           EventSpring.TypeLookup
 
 {-
   File Format:
@@ -55,7 +56,7 @@ instance BN.Binary SerializedEvent where
 serializeConduit :: (Monad m, MonadThrow m) => ConduitT AnySerialized BS.ByteString m ()
 serializeConduit = C.map (\dat -> SerializedEvent $ serializeAny dat) .| CBN.conduitEncode
 
-deserializeConduit :: (Monad m, MonadThrow m) => (SerializedType -> BSL.ByteString -> Either String AnyEvent) -> ConduitT BS.ByteString AnyEvent m ()
+deserializeConduit :: (Monad m, MonadThrow m) => (SerializedType -> BSL.ByteString -> Either DeserializeFailed AnyEvent) -> ConduitT BS.ByteString AnyEvent m ()
 deserializeConduit lookupType =
     C.filter (not . BS.null) .|
     CBN.conduitDecode .|
@@ -64,5 +65,5 @@ deserializeConduit lookupType =
         where
             deserializeFully = awaitForever $ \(PartialDeserialized typ dat) -> do
                 case lookupType typ dat of
-                    (Left err)  -> fail err
+                    (Left err)  -> throwM err
                     (Right dat) -> yield dat

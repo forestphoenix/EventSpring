@@ -10,8 +10,8 @@ import Control.Monad (forM_)
 mkTestStore :: IO (Store, IORef [AnyEvent])
 mkTestStore = do
     eventRef <- newIORef []
-    let writeToEventRef events = atomicModifyIORef' eventRef (\old -> (events ++ old, ()))
-    store <- mkEmptyStore writeToEventRef testProjector
+    let writeToEventRef events _ = atomicModifyIORef' eventRef (\old -> (events ++ old, ()))
+    store <- mkEmptyStore (WriteNewEvents writeToEventRef) testProjector
     return (store, eventRef)
 
 spec :: Spec
